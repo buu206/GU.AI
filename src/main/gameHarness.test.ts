@@ -113,7 +113,7 @@ describe('game harness required ImageGen contract', () => {
       expect(turn.prompt).toContain('plain text/default controls');
       expect(turn.prompt).toContain('<animation_needs_contract>');
       expect(turn.prompt).toContain('<experience_playtest_contract schema_version="1">');
-      expect(turn.prompt).toContain('`.noobi/playtest.json`');
+      expect(turn.prompt).toContain('`.gu/playtest.json`');
       expect(turn.prompt).toContain('artifacts/playtest/latest/report.json');
       expect(turn.prompt).toContain('<model3d_generation_contract>');
       expect(turn.prompt).toContain('configured 3D model API is always attempted first');
@@ -448,7 +448,7 @@ describe('game harness required ImageGen contract', () => {
     expect(prompt).toContain('generation="generate"');
     expect(prompt).toContain('generation="reuse"');
     expect(prompt).toContain('generation="not-needed"');
-    expect(prompt).toContain('Implementer MUST use noobi_image_generate');
+    expect(prompt).toContain('Implementer MUST use gu_image_generate');
     expect(prompt).toContain('at least two usable, distinct keyframes or one sprite sheet');
     expect(prompt).toContain('subject design, art style, palette, lighting, scale, frame dimensions, anchor, and view/camera angle');
     expect(prompt).toContain('actual frame selection or sprite-sheet cropping');
@@ -482,7 +482,7 @@ describe('game harness required ImageGen contract', () => {
     expect(prompt).toContain('launch/ready');
     expect(prompt).toContain('positive progress feedback');
     expect(prompt).toContain('pause and resume');
-    expect(prompt).toContain('`.noobi/playtest.json`');
+    expect(prompt).toContain('`.gu/playtest.json`');
     expect(prompt).toContain('"start":');
     expect(prompt).toContain('"move":');
     expect(prompt).toContain('"primary":');
@@ -493,7 +493,7 @@ describe('game harness required ImageGen contract', () => {
     expect(prompt).toContain('"durationMs":16..3000');
     expect(prompt).toContain('canvas-not-blank|screen-change|text-visible|element-visible');
     expect(prompt).toContain('Do not include JavaScript expressions, shell commands, URLs, absolute');
-    expect(prompt).toContain('Only the Noobi host owns `artifacts/playtest/`');
+    expect(prompt).toContain('Only the GU host owns `artifacts/playtest/`');
     expect(prompt).toContain('artifacts/playtest/latest/report.json');
     expect(prompt).toContain('artifacts/playtest/latest/screenshots/');
     expect(prompt).toContain('implausibly unchanged before/after frames');
@@ -553,7 +553,7 @@ describe('game harness required ImageGen contract', () => {
 
     expect(runtime.turns).toHaveLength(3);
     expect(runtime.turns[0]?.prompt).toContain('<host_audio_attestation status="missing">');
-    expect(runtime.turns[0]?.prompt).toContain('MUST call noobi_audio_generate once with purpose="music"');
+    expect(runtime.turns[0]?.prompt).toContain('MUST call gu_audio_generate once with purpose="music"');
     expect(runtime.turns[0]?.prompt).toContain('A failed call is a blocker');
     expect(runtime.turns[1]?.prompt).toContain('<host_audio_attestation status="missing">');
     expect(runtime.turns[2]?.prompt).toContain('<host_audio_attestation status="trusted-and-referenced">');

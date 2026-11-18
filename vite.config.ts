@@ -8,6 +8,8 @@ export default defineConfig({
   build: {
     outDir: '../../dist/renderer',
     emptyOutDir: true,
+    // Pixel-font subsets must remain files under the app's font-src 'self' policy.
+    assetsInlineLimit: 0,
   },
 });
 

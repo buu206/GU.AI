@@ -34,7 +34,7 @@ const TOOL_ICONS: Record<EnvironmentToolStatus['id'], LucideIcon> = {
 
 const TOOL_DESCRIPTIONS: Record<EnvironmentToolStatus['id'], string> = {
   codex: 'Agent 会话、工具调用与项目执行',
-  node: 'Noobi 桌面主进程与构建工具链',
+  node: 'GU 桌面主进程与构建工具链',
   godot: 'Godot 4 项目、场景验证与多平台导出',
 };
 
@@ -55,8 +55,8 @@ export function EnvironmentSettings({ onMessage }: EnvironmentSettingsProps) {
     setError('');
     try {
       const result = refresh
-        ? await window.noobi.refreshEnvironmentStatus()
-        : await window.noobi.getEnvironmentStatus();
+        ? await window.gu.refreshEnvironmentStatus()
+        : await window.gu.getEnvironmentStatus();
       setSnapshot(result);
       if (refresh) onMessage(environmentRefreshMessage(result));
     } catch (reason) {
@@ -76,9 +76,9 @@ export function EnvironmentSettings({ onMessage }: EnvironmentSettingsProps) {
     setBusy('choosing');
     setError('');
     try {
-      const binaryPath = await window.noobi.chooseGodotExecutable();
+      const binaryPath = await window.gu.chooseGodotExecutable();
       if (!binaryPath) return;
-      const result = await window.noobi.saveGodotExecutable(binaryPath);
+      const result = await window.gu.saveGodotExecutable(binaryPath);
       setSnapshot(result);
       onMessage(result.canCreateGodotProjects
         ? 'Godot 可执行文件已配置并通过检查。'
@@ -96,7 +96,7 @@ export function EnvironmentSettings({ onMessage }: EnvironmentSettingsProps) {
     setBusy('resetting');
     setError('');
     try {
-      const result = await window.noobi.saveGodotExecutable(null);
+      const result = await window.gu.saveGodotExecutable(null);
       setSnapshot(result);
       onMessage('已恢复自动查找 Godot。');
     } catch (reason) {
@@ -124,7 +124,7 @@ export function EnvironmentSettings({ onMessage }: EnvironmentSettingsProps) {
         <div>
           <span>GAME TOOLCHAIN / LOCAL HOST</span>
           <h3>环境管理</h3>
-          <p>检查游戏生产所需的本地工具。Noobi 只使用已经确认的可执行文件，不把环境路径交给 Agent 猜测。</p>
+          <p>检查游戏生产所需的本地工具。GU 只使用已经确认的可执行文件，不把环境路径交给 Agent 猜测。</p>
         </div>
         <button
           className="secondary-button compact"

@@ -347,7 +347,7 @@ const NATIVE_FOLIAGE_CLUSTERS = [
   },
 ];
 
-const HELP = `Render a seamless pixel-art GIF of four current Noobi IPs fishing.
+const HELP = `Render a seamless pixel-art GIF of four current GU IPs fishing.
 
 Usage:
   node scripts/render-fishing-gif.mjs [options]
@@ -518,7 +518,7 @@ async function main() {
     outputHeight,
   });
 
-  const frameDirectory = await mkdtemp(join(tmpdir(), 'noobi-fishing-gif-'));
+  const frameDirectory = await mkdtemp(join(tmpdir(), 'gu-fishing-gif-'));
   const temporaryOutput = join(
     dirname(options.output),
     `.${basename(options.output)}.${process.pid}.tmp.gif`,
@@ -585,7 +585,7 @@ function parseArguments(args) {
     positions: DEFAULT_POSITIONS.map((point) => ({ ...point })),
     bobbers: DEFAULT_BOBBERS.map((point) => ({ ...point })),
     colors: 160,
-    ffmpeg: process.env.NOOBI_FFMPEG || 'ffmpeg',
+    ffmpeg: process.env.GU_FFMPEG || 'ffmpeg',
     dryRun: false,
     help: false,
   };
@@ -689,7 +689,7 @@ function parsePacks(value) {
   if (packs.length !== 4) throw new Error('--packs requires exactly four comma-separated IDs.');
   if (new Set(packs).size !== packs.length) throw new Error('--packs cannot contain duplicates.');
   const unknown = packs.filter((pack) => !KNOWN_PACKS.has(pack));
-  if (unknown.length > 0) throw new Error(`Unknown Noobi pack: ${unknown.join(', ')}`);
+  if (unknown.length > 0) throw new Error(`Unknown GU pack: ${unknown.join(', ')}`);
   return packs;
 }
 

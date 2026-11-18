@@ -2,17 +2,17 @@ import { Check, MonitorPlay } from 'lucide-react';
 import React, { type KeyboardEvent } from 'react';
 
 import type {
-  NoobiPackId,
-  NoobiSceneId,
+  GuPackId,
+  GuSceneId,
 } from '../../shared/contracts';
-import collaborationScene from '../assets/noobi-packs/collaboration/scene.png';
-import fishingScene from '../assets/noobi-packs/fishing/four-ip-fishing.gif';
+import { GU_SCENE_IMAGES } from '../guSceneAssets';
+import { CYBER_SCENES } from '../cyberArtAssets';
 import {
-  NOOBI_PACK_OPTIONS,
-  noobiPackGridColumnCount,
-} from './NoobiPackPicker';
+  GU_PACK_OPTIONS,
+  guPackGridColumnCount,
+} from './GuPackPicker';
 
-export interface NoobiSceneOption<Id extends string = string> {
+export interface GuSceneOption<Id extends string = string> {
   id: Id;
   eyebrow: string;
   name: string;
@@ -22,64 +22,64 @@ export interface NoobiSceneOption<Id extends string = string> {
   animated: boolean;
 }
 
-export const NOOBI_SOLO_SCENE_OPTIONS: readonly NoobiSceneOption<NoobiPackId>[] =
-  NOOBI_PACK_OPTIONS.map((option) => ({
+export const GU_SOLO_SCENE_OPTIONS: readonly GuSceneOption<GuPackId>[] =
+  GU_PACK_OPTIONS.map((option) => ({
     id: option.id,
     eyebrow: option.eyebrow,
     name: option.name,
     description: option.sceneDescription,
     image: option.sceneImage,
-    badges: ['单人工作室', '角色独立选择'],
+    badges: ['单人控制台', '装备独立选择'],
     animated: false,
   }));
 
-export const NOOBI_SCENE_OPTIONS: readonly NoobiSceneOption<NoobiSceneId>[] = [
+export const GU_SCENE_OPTIONS: readonly GuSceneOption<GuSceneId>[] = [
   {
     id: 'collaboration',
-    eyebrow: 'COLLABORATION WORKSHOP',
-    name: '协作工坊',
-    description: '伙伴会按照岗位在策划、美术、工程与测试工位之间协作。',
-    image: collaborationScene,
+    eyebrow: 'NEON COMMAND',
+    name: '霓虹指挥站',
+    description: '游侠编队在像素终端间协作。',
+    image: GU_SCENE_IMAGES.collaboration,
     badges: ['多人场景', '按编队渲染'],
     animated: false,
   },
   {
     id: 'fishing',
-    eyebrow: 'POND RETREAT',
-    name: '荷塘钓鱼',
-    description: '流水、游鱼与随风花草组成的四人钓鱼休憩场景。',
-    image: fishingScene,
-    badges: ['动态循环', '固定四人'],
-    animated: true,
+    eyebrow: 'ROOFTOP BREAK',
+    name: '天台休息站',
+    description: '夜城天台，游侠编队的休息站。',
+    image: CYBER_SCENES.fishing,
+    badges: ['夜城天台', '按编队渲染'],
+    animated: false,
   },
-] as const satisfies readonly NoobiSceneOption<NoobiSceneId>[];
+] as const satisfies readonly GuSceneOption<GuSceneId>[];
 
 interface PickerShellProps<Id extends string> {
   value: Id | null;
-  options: readonly NoobiSceneOption<Id>[];
+  options: readonly GuSceneOption<Id>[];
   variant: 'solo' | 'multiplayer';
   disabled: boolean;
   busy: boolean;
   onChange: (sceneId: Id) => void;
 }
 
-interface NoobiSoloScenePickerProps {
-  value: NoobiPackId;
+interface GuSoloScenePickerProps {
+  value: GuPackId;
   disabled?: boolean;
   busy?: boolean;
-  onChange: (sceneId: NoobiPackId) => void;
+  onChange: (sceneId: GuPackId) => void;
 }
 
-export function NoobiSoloScenePicker({
+export function GuSoloScenePicker({
   value,
   disabled = false,
   busy = false,
   onChange,
-}: NoobiSoloScenePickerProps) {
+}: GuSoloScenePickerProps) {
   return (
-    <NoobiScenePickerShell
+    <GuScenePickerShell
       value={value}
-      options={NOOBI_SOLO_SCENE_OPTIONS}
+      options={GU_SOLO_SCENE_OPTIONS}
       variant="solo"
       disabled={disabled}
       busy={busy}
@@ -88,23 +88,23 @@ export function NoobiSoloScenePicker({
   );
 }
 
-interface NoobiScenePickerProps {
-  value: NoobiSceneId | null;
+interface GuScenePickerProps {
+  value: GuSceneId | null;
   disabled?: boolean;
   busy?: boolean;
-  onChange: (sceneId: NoobiSceneId) => void;
+  onChange: (sceneId: GuSceneId) => void;
 }
 
-export function NoobiScenePicker({
+export function GuScenePicker({
   value,
   disabled = false,
   busy = false,
   onChange,
-}: NoobiScenePickerProps) {
+}: GuScenePickerProps) {
   return (
-    <NoobiScenePickerShell
+    <GuScenePickerShell
       value={value}
-      options={NOOBI_SCENE_OPTIONS}
+      options={GU_SCENE_OPTIONS}
       variant="multiplayer"
       disabled={disabled}
       busy={busy}
@@ -113,7 +113,7 @@ export function NoobiScenePicker({
   );
 }
 
-function NoobiScenePickerShell<Id extends string>({
+function GuScenePickerShell<Id extends string>({
   value,
   options,
   variant,
@@ -130,7 +130,7 @@ function NoobiScenePickerShell<Id extends string>({
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
     const container = event.currentTarget.parentElement;
-    const columnCount = noobiPackGridColumnCount(container);
+    const columnCount = guPackGridColumnCount(container);
     let nextIndex = index;
     if (event.key === 'Home') nextIndex = 0;
     if (event.key === 'End') nextIndex = options.length - 1;
@@ -149,26 +149,26 @@ function NoobiScenePickerShell<Id extends string>({
 
   return (
     <section
-      className={`noobi-scene-picker variant-${variant}`}
+      className={`gu-scene-picker variant-${variant}`}
       data-scene-kind={variant}
-      aria-label={solo ? 'Noobi 单人工作室' : 'Noobi 多人运行背景'}
+      aria-label={solo ? '游侠单人控制台' : '游侠多人运行背景'}
       aria-busy={busy}
     >
-      <header className="noobi-scene-heading">
-        <span className="noobi-scene-heading-icon" aria-hidden="true"><MonitorPlay size={18} /></span>
+      <header className="gu-scene-heading">
+        <span className="gu-scene-heading-icon" aria-hidden="true"><MonitorPlay size={18} /></span>
         <div>
-          <small>{solo ? '02 / SOLO WORKSPACE' : 'MULTIPLAYER STAGE'}</small>
-          <strong>{solo ? '再选择一个单人工作室' : '最后选择多人工作的舞台'}</strong>
+          <small>{solo ? 'SOLO DESK' : 'CREW STATION'}</small>
+          <strong>{solo ? '单人控制台' : '多人控制台'}</strong>
           <p>{solo
-            ? '场景与角色互相独立；任何角色都可以进入任意一个工作室。'
-            : '选择这里的任一舞台后，运行预览才会切换为多人模式。'}</p>
+            ? '背景与装备可分开选择。'
+            : '选择背景后启用多人模式。'}</p>
         </div>
       </header>
 
       <div
-        className="noobi-scene-grid"
+        className="gu-scene-grid"
         role="radiogroup"
-        aria-label={solo ? '选择单人工作室' : '选择多人运行背景'}
+        aria-label={solo ? '选择单人控制台' : '选择多人运行背景'}
       >
         {options.map((option, index) => {
           const selected = option.id === value;
@@ -178,7 +178,7 @@ function NoobiScenePickerShell<Id extends string>({
               role="radio"
               aria-checked={selected}
               aria-label={`${option.name}：${option.description}；${option.badges.join('，')}`}
-              className={`noobi-pack-card noobi-scene-card${selected ? ' is-selected' : ''}`}
+              className={`gu-pack-card gu-scene-card${selected ? ' is-selected' : ''}`}
               data-scene-id={option.id}
               data-scene-index={index}
               data-scene-kind={variant}
@@ -189,26 +189,26 @@ function NoobiScenePickerShell<Id extends string>({
               onKeyDown={(event) => handleArrowKey(event, index)}
               onClick={() => onChange(option.id)}
             >
-              <span className="noobi-pack-preview noobi-scene-preview" aria-hidden="true">
+              <span className="gu-pack-preview gu-scene-preview" aria-hidden="true">
                 <img
-                  className="noobi-pack-scene-image"
+                  className="gu-pack-scene-image"
                   src={option.image}
                   alt=""
                   draggable={false}
                 />
-                <span className="noobi-scene-live-badge">
+                <span className="gu-scene-live-badge">
                   <i /> {solo ? 'SOLO MAP' : option.animated ? 'LIVE LOOP' : 'CREW MAP'}
                 </span>
               </span>
-              <span className="noobi-pack-card-copy noobi-scene-card-copy">
+              <span className="gu-pack-card-copy gu-scene-card-copy">
                 <small>{option.eyebrow}</small>
                 <strong>{option.name}</strong>
                 <span>{option.description}</span>
-                <span className="noobi-scene-card-meta" aria-hidden="true">
+                <span className="gu-scene-card-meta" aria-hidden="true">
                   {option.badges.map((badge) => <em key={badge}>{badge}</em>)}
                 </span>
               </span>
-              <span className="noobi-pack-check" aria-hidden="true"><Check size={13} /></span>
+              <span className="gu-pack-check" aria-hidden="true"><Check size={13} /></span>
             </button>
           );
         })}

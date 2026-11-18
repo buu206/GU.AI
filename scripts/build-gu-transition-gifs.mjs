@@ -154,7 +154,7 @@ async function buildSceneGif(scene) {
     requireFile(spriteBPath),
   ]);
 
-  const temporaryDirectory = await mkdtemp(join(tmpdir(), `noobi-${scene.id}-`));
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), `gu-${scene.id}-`));
 
   try {
     const normalizedScenePath = join(temporaryDirectory, 'scene.png');

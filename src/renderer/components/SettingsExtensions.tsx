@@ -1,3 +1,4 @@
+import { useConfirmation } from './Confirmation';
 import {
   Box,
   Cable,
@@ -19,7 +20,7 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { toMessage } from '../ui';
 
@@ -282,18 +283,26 @@ const PROVIDERS: Record<MediaCapability, ProviderPreset[]> = {
   ],
 };
 
-export function useExtensionSettings(onMessage: (message: string) => void) {
+export function useExtensionSettings(onFeedback: (message: string) => void, enabled = true) {
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
-  const [loading, setLoading] = useState(true);
-  const api = window.noobi as typeof window.noobi & OptionalExtensionsApi;
+  const [loading, setLoading] = useState(enabled);
+  const feedback = useRef({ enabled, onFeedback });
+  feedback.current = { enabled, onFeedback };
+  const api = window.gu as typeof window.gu & OptionalExtensionsApi;
   const supported = typeof api.getExtensionSettings === 'function';
+
+  function onMessage(message: string) {
+    // Pending extension operations must not write feedback into unrelated pages.
+    if (feedback.current.enabled) feedback.current.onFeedback(message);
+  }
 
   useEffect(() => {
     let cancelled = false;
-    if (!api.getExtensionSettings) {
+    if (!enabled || !api.getExtensionSettings) {
       setLoading(false);
       return;
     }
+    setLoading(true);
     api.getExtensionSettings()
       .then((result) => {
         if (!cancelled) setSnapshot(normalizeSnapshot(result));
@@ -305,7 +314,7 @@ export function useExtensionSettings(onMessage: (message: string) => void) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [enabled]);
 
   async function saveMedia(input: SaveMediaProviderInput) {
     if (!api.saveMediaProvider) return unsupported(onMessage);
@@ -469,7 +478,7 @@ export function MediaApiSettings({ controller }: { controller: ExtensionSettings
         <Sparkles size={16} />
         <div>
           <strong>媒体路由与连接检查</strong>
-          <span>图像优先使用已配置 API，否则由 Codex ImageGen 接管。3D 始终先走已配置 API；未配置时，Noobi 在宿主内用 Three.js 自动导出可由 Godot 直接导入的 GLB。MiniMax 仅负责音乐、语音和人声音效；枪声、爆炸等通用 SFX 使用程序化回退。MiniMax 音频检查会发起一次极短 Speech 鉴权探测，但 Music 3.0 账户资格仍在首次实际音乐生成时确认。其他服务的实际模型可用性也在生成时确认。</span>
+          <span>图像优先使用已配置 API，否则由 Codex ImageGen 接管。3D 始终先走已配置 API；未配置时，GU 在宿主内用 Three.js 自动导出可由 Godot 直接导入的 GLB。MiniMax 仅负责音乐、语音和人声音效；枪声、爆炸等通用 SFX 使用程序化回退。MiniMax 音频检查会发起一次极短 Speech 鉴权探测，但 Music 3.0 账户资格仍在首次实际音乐生成时确认。其他服务的实际模型可用性也在生成时确认。</span>
         </div>
       </div>
     </section>
@@ -489,6 +498,7 @@ function ProviderModule({
   onSave: (input: SaveMediaProviderInput) => Promise<void>;
   onTest: (capability: MediaCapability) => Promise<void>;
 }) {
+  const confirm = useConfirmation();
   const [draft, setDraft] = useState(value);
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState<'save' | 'test' | null>(null);
@@ -553,7 +563,7 @@ function ProviderModule({
 
   async function clearSavedKey() {
     if (!hasSavedKeyForDraft || dirty) return;
-    if (!window.confirm('清除这个媒体服务已保存的 API Key？清除后服务会停用，直到重新保存密钥。')) return;
+    if (!(await confirm('清除这个媒体服务已保存的 API Key？清除后服务会停用，直到重新保存密钥。'))) return;
     setBusy('save');
     try {
       await onSave({
@@ -717,25 +727,25 @@ export function SkillsSettings({ controller }: { controller: ExtensionSettingsCo
   }
 
   function renderSkillRow(item: SkillSetting) {
-    const requiredByNoobi = item.name.trim().toLowerCase() === 'imagegen';
+    const requiredByGu = item.name.trim().toLowerCase() === 'imagegen';
     return (
-      <article className={`extension-row${requiredByNoobi ? ' is-required' : ''}`} key={item.id}>
+      <article className={`extension-row${requiredByGu ? ' is-required' : ''}`} key={item.id}>
         <span className="extension-glyph"><FileCode2 size={16} /></span>
         <div className="extension-copy">
           <div>
             <strong>{item.name}</strong>
             <span className={`source-badge source-${item.source}`}>{sourceLabel(item.source)}</span>
-            {requiredByNoobi ? <span className="source-badge noobi-required-badge">NOOBI REQUIRED</span> : null}
+            {requiredByGu ? <span className="source-badge gu-required-badge">GU REQUIRED</span> : null}
           </div>
-          <p>{requiredByNoobi ? 'Noobi 的默认图片生成与 API 失败回退依赖此 Skill；游戏制作流程中始终保持启用。' : item.description || '此 Skill 未提供说明。'}</p>
+          <p>{requiredByGu ? 'GU 的默认图片生成与 API 失败回退依赖此 Skill；游戏制作流程中始终保持启用。' : item.description || '此 Skill 未提供说明。'}</p>
           {item.path ? <code title={item.path}>{item.path}</code> : null}
         </div>
-        <label className="switch-control compact-switch" title={requiredByNoobi ? 'Noobi 游戏制作必需，无法在这里停用' : undefined}>
-          <span className="sr-only">{requiredByNoobi ? `${item.name} 是 Noobi 必需 Skill，始终启用` : `${item.enabled ? '停用' : '启用'} ${item.name}`}</span>
+        <label className="switch-control compact-switch" title={requiredByGu ? 'GU 游戏制作必需，无法在这里停用' : undefined}>
+          <span className="sr-only">{requiredByGu ? `${item.name} 是 GU 必需 Skill，始终启用` : `${item.enabled ? '停用' : '启用'} ${item.name}`}</span>
           <input
             type="checkbox"
-            checked={requiredByNoobi || item.enabled}
-            disabled={requiredByNoobi || !controller.supported || pending === item.id}
+            checked={requiredByGu || item.enabled}
+            disabled={requiredByGu || !controller.supported || pending === item.id}
             onChange={() => void toggle(item)}
           />
           <span aria-hidden="true" />
@@ -779,7 +789,7 @@ export function SkillsSettings({ controller }: { controller: ExtensionSettingsCo
         <span className="settings-count">{skills.length.toString().padStart(2, '0')} / {controller.snapshot.skills.length.toString().padStart(2, '0')}</span>
       </div>
       <div className="extension-list" aria-live="polite">
-        {renderGroup('Noobi 必需', '游戏制作依赖的核心能力', groups.required)}
+        {renderGroup('GU 必需', '游戏制作依赖的核心能力', groups.required)}
         {renderGroup('我的 Skills', '你自己安装或项目内定义的 Skill', groups.mine)}
         {renderGroup('系统内置', 'Codex 运行时自带的基础能力', groups.builtin)}
         {!skills.length ? <EmptyExtensionState icon={FileCode2} title={query ? '没有匹配的 Skill' : '尚未发现 Skills'} description={query ? '换一个名称或来源关键词。' : 'Host Bridge 接通后会列出 Codex 系统与你的 Skills。'} /> : null}
@@ -915,6 +925,7 @@ export function PromptSettings({
   onDirtyChange?: (dirty: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
 }) {
+  const confirm = useConfirmation();
   const templates = controller.snapshot.promptTemplates;
   const [selectedId, setSelectedId] = useState<PromptTemplateId | null>(null);
   const selected = templates.find((item) => item.id === selectedId) ?? templates[0] ?? null;
@@ -941,9 +952,9 @@ export function PromptSettings({
     onBusyChange?.(false);
   }, [onBusyChange, onDirtyChange]);
 
-  function selectTemplate(id: PromptTemplateId) {
+  async function selectTemplate(id: PromptTemplateId) {
     if (id === selected?.id || busy !== null) return;
-    if (dirty && !window.confirm('当前提示词有未保存更改。切换角色会放弃这些更改，是否继续？')) return;
+    if (dirty && !(await confirm('当前提示词有未保存更改。切换角色会放弃这些更改，是否继续？'))) return;
     setSelectedId(id);
   }
 
@@ -961,7 +972,7 @@ export function PromptSettings({
 
   async function reset() {
     if (!selected) return;
-    if (!window.confirm(`将“${selected.name}”恢复为产品默认补充词？当前自定义内容将被覆盖。`)) return;
+    if (!(await confirm(`将“${selected.name}”恢复为产品默认补充词？当前自定义内容将被覆盖。`))) return;
     setBusy('reset');
     try {
       const restored = await controller.resetPrompt(selected.id);

@@ -7,9 +7,9 @@ import {
   pixelTransitionCellDelay,
 } from './PixelPageTransition';
 import {
-  NOOBI_TRANSITION_SCENE_COUNT,
-  noobiTransitionSceneIndex,
-} from './noobiTransitionScenes';
+  GU_TRANSITION_SCENE_COUNT,
+  guTransitionSceneIndex,
+} from './guTransitionScenes';
 
 describe('pixel page transition wave', () => {
   it('moves forward from the top-left toward the bottom-right', () => {
@@ -32,16 +32,16 @@ describe('pixel page transition wave', () => {
   });
 });
 
-describe('Noobi transition scene rotation', () => {
-  it('ships nine scenes and advances one scene per transition run', () => {
-    expect(NOOBI_TRANSITION_SCENE_COUNT).toBe(9);
-    expect(noobiTransitionSceneIndex(1)).toBe(0);
-    expect(noobiTransitionSceneIndex(9)).toBe(8);
-    expect(noobiTransitionSceneIndex(10)).toBe(0);
+describe('GU transition scene rotation', () => {
+  it('rotates through the available cyber scenes and wraps after the final scene', () => {
+    expect(GU_TRANSITION_SCENE_COUNT).toBeGreaterThanOrEqual(3);
+    expect(guTransitionSceneIndex(1)).toBe(0);
+    expect(guTransitionSceneIndex(GU_TRANSITION_SCENE_COUNT)).toBe(GU_TRANSITION_SCENE_COUNT - 1);
+    expect(guTransitionSceneIndex(GU_TRANSITION_SCENE_COUNT + 1)).toBe(0);
   });
 
   it('uses the first scene for an initial or invalid run id', () => {
-    expect(noobiTransitionSceneIndex(0)).toBe(0);
-    expect(noobiTransitionSceneIndex(Number.NaN)).toBe(0);
+    expect(guTransitionSceneIndex(0)).toBe(0);
+    expect(guTransitionSceneIndex(Number.NaN)).toBe(0);
   });
 });

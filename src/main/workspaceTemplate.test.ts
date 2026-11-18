@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createWorkspaceTemplate,
-  NOOBI_HOST_RUNTIME_POLICY_END,
-  NOOBI_HOST_RUNTIME_POLICY_START,
-  NOOBI_HOST_RUNTIME_POLICY_VERSION,
+  GU_HOST_RUNTIME_POLICY_END,
+  GU_HOST_RUNTIME_POLICY_START,
+  GU_HOST_RUNTIME_POLICY_VERSION,
   synchronizeGodotPresentationPolicy,
   synchronizeWorkspaceHostPolicy,
 } from './workspaceTemplate.js';
@@ -21,7 +21,7 @@ afterEach(async () => {
 
 describe('createWorkspaceTemplate', () => {
   it('creates a neutral project scaffold with local Agent instructions', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-template-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-template-'));
     temporaryRoots.push(root);
     await createWorkspaceTemplate(root, {
       id: 'project-template',
@@ -37,8 +37,8 @@ describe('createWorkspaceTemplate', () => {
       'small playable vertical slice',
     );
     await expect(
-      readFile(join(root, '.codex/skills/noobi-game-builder/SKILL.md'), 'utf8'),
-    ).resolves.toContain('Noobi Game Builder');
+      readFile(join(root, '.codex/skills/gu-game-builder/SKILL.md'), 'utf8'),
+    ).resolves.toContain('GU Game Builder');
 
     const manifest = JSON.parse(
       await readFile(join(root, 'public/assets/asset-pack.json'), 'utf8'),
@@ -51,7 +51,7 @@ describe('createWorkspaceTemplate', () => {
     });
 
     const playtest = JSON.parse(
-      await readFile(join(root, '.noobi/playtest.json'), 'utf8'),
+      await readFile(join(root, '.gu/playtest.json'), 'utf8'),
     ) as Record<string, unknown>;
     expect(playtest).toMatchObject({
       schemaVersion: 1,
@@ -90,8 +90,8 @@ describe('createWorkspaceTemplate', () => {
     ]));
 
     const agents = await readFile(join(root, 'AGENTS.md'), 'utf8');
-    expect(agents).toContain('noobi_image_generate');
-    expect(agents).toContain('host-trusted generated image is required for every Noobi.ai game');
+    expect(agents).toContain('gu_image_generate');
+    expect(agents).toContain('host-trusted generated image is required for every GU.AI game');
     expect(agents).toContain('Codex ImageGen fallback');
     expect(agents).toContain('visibly loaded by the running game');
     expect(agents).toContain('core visual asset coverage table');
@@ -103,19 +103,19 @@ describe('createWorkspaceTemplate', () => {
     expect(agents).toContain('Do not regenerate an already suitable animation asset');
     expect(agents).toContain('self-contained Three.js-authored GLB');
     expect(agents).toContain('real rigged GLB clip');
-    expect(agents).toContain('noobi_audio_synthesize');
-    expect(agents).toContain('noobi_audio_generate');
+    expect(agents).toContain('gu_audio_synthesize');
+    expect(agents).toContain('gu_audio_generate');
     expect(agents).toContain('must set an explicit `purpose`');
     expect(agents).toContain('`music`, `speech`, `vocal-sfx`, `sfx`, or `ambience`');
     expect(agents).toContain('Do not claim MiniMax generates generic game SFX or ambience');
     expect(agents).toContain('gunshots, explosions');
     expect(agents).toContain('`procedural-audio`');
-    expect(agents).toContain('noobi_model3d_generate');
+    expect(agents).toContain('gu_model3d_generate');
     expect(agents).toContain('self-contained GLB 2.0');
     expect(agents).toContain('host automatically prioritizes an active 3D API');
     expect(agents).toContain('built-in Three.js exporter');
     expect(agents).toContain('playable vertical slices');
-    expect(agents).toContain('`.noobi/playtest.json`');
+    expect(agents).toContain('`.gu/playtest.json`');
     expect(agents).toContain('all five common action mappings');
     expect(agents).toContain('key, pointer, look, drag, and wait');
     expect(agents).toContain('artifacts/playtest/latest/report.json');
@@ -124,17 +124,17 @@ describe('createWorkspaceTemplate', () => {
     expect(agents).toContain('targetFps=120');
     expect(agents).toContain('does not require 120 unique bitmap poses');
     expect(agents).toContain('Replace, resample, retag, or reselect');
-    expect(agents.startsWith(NOOBI_HOST_RUNTIME_POLICY_START)).toBe(true);
-    expect(occurrences(agents, NOOBI_HOST_RUNTIME_POLICY_START)).toBe(1);
-    expect(agents).toContain('`.noobi/project.json` field `targetFrameRate=120` is authoritative');
+    expect(agents.startsWith(GU_HOST_RUNTIME_POLICY_START)).toBe(true);
+    expect(occurrences(agents, GU_HOST_RUNTIME_POLICY_START)).toBe(1);
+    expect(agents).toContain('`.gu/project.json` field `targetFrameRate=120` is authoritative');
     expectManagedMediaPolicy(agents);
 
     const skill = await readFile(
-      join(root, '.codex/skills/noobi-game-builder/SKILL.md'),
+      join(root, '.codex/skills/gu-game-builder/SKILL.md'),
       'utf8',
     );
     expect(skill).toContain('public/assets/asset-pack.json');
-    expect(skill).toContain('noobi_asset_register');
+    expect(skill).toContain('gu_asset_register');
     expect(skill).toContain('MiniMax `music` to its Music model');
     expect(skill).toContain('`speech`/`vocal-sfx` to its Speech model');
     expect(skill).toContain('A `purpose` of `sfx` or `ambience` intentionally returns `procedural-audio`');
@@ -164,10 +164,10 @@ describe('createWorkspaceTemplate', () => {
     expect(skill).toContain('sourceAnimationFps');
     expect(skill).toContain('Never duplicate frames merely to claim 120 FPS');
     expect(skill).toContain('bounded fixed-step accumulator at 120 Hz');
-    expect(skill.startsWith('---\nname: noobi-game-builder')).toBe(true);
-    expect(occurrences(skill, NOOBI_HOST_RUNTIME_POLICY_START)).toBe(1);
-    expect(skill.indexOf(NOOBI_HOST_RUNTIME_POLICY_START)).toBeLessThan(
-      skill.indexOf('# Noobi Game Builder'),
+    expect(skill.startsWith('---\nname: gu-game-builder')).toBe(true);
+    expect(occurrences(skill, GU_HOST_RUNTIME_POLICY_START)).toBe(1);
+    expect(skill.indexOf(GU_HOST_RUNTIME_POLICY_START)).toBeLessThan(
+      skill.indexOf('# GU Game Builder'),
     );
     expectManagedMediaPolicy(skill);
 
@@ -185,25 +185,25 @@ describe('createWorkspaceTemplate', () => {
     expect(design).toContain('Selected target: **120 FPS**');
     expect(design).toContain('target-specific animation asset is tagged for 120 FPS');
     expect(design).toContain('## Player experience journey');
-    expect(design).toContain('`.noobi/playtest.json` matches the production controls');
+    expect(design).toContain('`.gu/playtest.json` matches the production controls');
     expect(design).toContain('`artifacts/playtest/latest/report.json` passes every declared step');
 
     const readme = await readFile(join(root, 'README.md'), 'utf8');
-    expect(readme).toContain('Every Noobi.ai run includes an animation needs assessment');
+    expect(readme).toContain('Every GU.AI run includes an animation needs assessment');
     expect(readme).toContain('verify and reuse the existing frame set/sprite sheet');
     expect(readme).toContain('Actual rigged 3D characters use real GLB animation clips');
     expect(readme).toContain('This project targets **120 FPS**');
-    expect(readme).toContain('executable experience route in `.noobi/playtest.json`');
-    expect(readme).toContain('Noobi.ai owns the resulting `artifacts/playtest/latest/report.json`');
+    expect(readme).toContain('executable experience route in `.gu/playtest.json`');
+    expect(readme).toContain('GU.AI owns the resulting `artifacts/playtest/latest/report.json`');
 
     const metadata = JSON.parse(
-      await readFile(join(root, '.noobi/project.json'), 'utf8'),
+      await readFile(join(root, '.gu/project.json'), 'utf8'),
     ) as Record<string, unknown>;
     expect(metadata.targetFrameRate).toBe(120);
-    expect(metadata.starter).toBe('noobi-browser-neutral');
+    expect(metadata.starter).toBe('gu-browser-neutral');
 
     const starter = await readFile(join(root, 'src/main.js'), 'utf8');
-    expect(starter).toContain('NOOBI_HOST_GENERATED_NEUTRAL_STARTER');
+    expect(starter).toContain('GU_HOST_GENERATED_NEUTRAL_STARTER');
     expect(starter).toContain('neutral scaffolding created for a brand-new project');
     expect(starter).toContain('等待 Agent 根据项目需求构建实际玩法');
     expect(starter).not.toContain('收集绿色光点');
@@ -219,7 +219,7 @@ describe('createWorkspaceTemplate', () => {
   });
 
   it('keeps Three.js as an offline GLB authoring fallback for Godot workspaces', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-godot-model-route-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-godot-model-route-'));
     temporaryRoots.push(root);
     await createWorkspaceTemplate(root, {
       id: 'project-godot-model-route',
@@ -232,13 +232,13 @@ describe('createWorkspaceTemplate', () => {
     });
 
     const agents = await readFile(join(root, 'AGENTS.md'), 'utf8');
-    const skill = await readFile(join(root, '.codex/skills/noobi-game-builder/SKILL.md'), 'utf8');
+    const skill = await readFile(join(root, '.codex/skills/gu-game-builder/SKILL.md'), 'utf8');
     const metadata = JSON.parse(
-      await readFile(join(root, '.noobi/project.json'), 'utf8'),
+      await readFile(join(root, '.gu/project.json'), 'utf8'),
     ) as Record<string, unknown>;
     const starter = await readFile(join(root, 'scripts/main.gd'), 'utf8');
-    expect(metadata.starter).toBe('noobi-godot-4-neutral');
-    expect(starter).toContain('NOOBI_HOST_GENERATED_NEUTRAL_STARTER');
+    expect(metadata.starter).toBe('gu-godot-4-neutral');
+    expect(starter).toContain('GU_HOST_GENERATED_NEUTRAL_STARTER');
     expect(starter).toContain('NEUTRAL GODOT STARTER');
     expect(starter).not.toContain('TARGET_SCORE');
     expect(starter).not.toContain('hazard_positions');
@@ -253,7 +253,7 @@ describe('createWorkspaceTemplate', () => {
   });
 
   it('migrates Godot boot branding settings safely and idempotently', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-godot-branding-policy-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-godot-branding-policy-'));
     temporaryRoots.push(root);
     await writeFile(join(root, 'project.godot'), [
       'config_version=5',
@@ -290,7 +290,7 @@ describe('createWorkspaceTemplate', () => {
   });
 
   it('atomically synchronizes authoritative FPS metadata and managed policy blocks without replacing user content', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-policy-sync-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-policy-sync-'));
     temporaryRoots.push(root);
     const project = {
       id: 'project-policy-sync',
@@ -303,7 +303,7 @@ describe('createWorkspaceTemplate', () => {
     await createWorkspaceTemplate(root, project);
 
     const agentsPath = join(root, 'AGENTS.md');
-    const skillPath = join(root, '.codex/skills/noobi-game-builder/SKILL.md');
+    const skillPath = join(root, '.codex/skills/gu-game-builder/SKILL.md');
     await appendFile(agentsPath, '\nUSER_AGENTS_SENTINEL\n', 'utf8');
     await appendFile(skillPath, '\nUSER_SKILL_SENTINEL\n', 'utf8');
     const agentsBefore = await readFile(agentsPath, 'utf8');
@@ -315,7 +315,7 @@ describe('createWorkspaceTemplate', () => {
     });
 
     const metadata = JSON.parse(
-      await readFile(join(root, '.noobi/project.json'), 'utf8'),
+      await readFile(join(root, '.gu/project.json'), 'utf8'),
     ) as Record<string, unknown>;
     expect(metadata).toMatchObject({
       id: project.id,
@@ -327,17 +327,17 @@ describe('createWorkspaceTemplate', () => {
     const agentsAfter = await readFile(agentsPath, 'utf8');
     const skillAfter = await readFile(skillPath, 'utf8');
     for (const content of [agentsAfter, skillAfter]) {
-      expect(occurrences(content, NOOBI_HOST_RUNTIME_POLICY_START)).toBe(1);
-      expect(occurrences(content, NOOBI_HOST_RUNTIME_POLICY_END)).toBe(1);
+      expect(occurrences(content, GU_HOST_RUNTIME_POLICY_START)).toBe(1);
+      expect(occurrences(content, GU_HOST_RUNTIME_POLICY_END)).toBe(1);
       expect(content).toContain('Current host-selected target: **120 FPS**');
       expect(content).toContain('`targetFrameRate=120` is authoritative');
       expect(content).toContain('overrides any lower, potentially stale text');
       expectManagedMediaPolicy(content);
     }
-    expect(agentsAfter.startsWith(NOOBI_HOST_RUNTIME_POLICY_START)).toBe(true);
-    expect(skillAfter.startsWith('---\nname: noobi-game-builder')).toBe(true);
-    expect(skillAfter.indexOf(NOOBI_HOST_RUNTIME_POLICY_START)).toBeLessThan(
-      skillAfter.indexOf('# Noobi Game Builder'),
+    expect(agentsAfter.startsWith(GU_HOST_RUNTIME_POLICY_START)).toBe(true);
+    expect(skillAfter.startsWith('---\nname: gu-game-builder')).toBe(true);
+    expect(skillAfter.indexOf(GU_HOST_RUNTIME_POLICY_START)).toBeLessThan(
+      skillAfter.indexOf('# GU Game Builder'),
     );
     expect(withoutManagedPolicy(agentsAfter)).toBe(withoutManagedPolicy(agentsBefore));
     expect(withoutManagedPolicy(skillAfter)).toBe(withoutManagedPolicy(skillBefore));
@@ -353,7 +353,7 @@ describe('createWorkspaceTemplate', () => {
   });
 
   it('migrates the versioned media contract into legacy instructions without replacing user content', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-policy-legacy-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-policy-legacy-'));
     temporaryRoots.push(root);
     const project = {
       id: 'project-policy-legacy',
@@ -366,11 +366,11 @@ describe('createWorkspaceTemplate', () => {
     await createWorkspaceTemplate(root, project);
 
     const agentsPath = join(root, 'AGENTS.md');
-    const skillPath = join(root, '.codex/skills/noobi-game-builder/SKILL.md');
+    const skillPath = join(root, '.codex/skills/gu-game-builder/SKILL.md');
     const legacyAgents = '# User-owned legacy agents\n\nUSER_AGENTS_LEGACY_SENTINEL\n';
     const skillFrontMatter = [
       '---',
-      'name: noobi-game-builder',
+      'name: gu-game-builder',
       'description: User-maintained legacy skill.',
       '---',
     ].join('\n');
@@ -386,25 +386,25 @@ describe('createWorkspaceTemplate', () => {
     const agentsAfter = await readFile(agentsPath, 'utf8');
     const skillAfter = await readFile(skillPath, 'utf8');
     for (const content of [agentsAfter, skillAfter]) {
-      expect(occurrences(content, NOOBI_HOST_RUNTIME_POLICY_START)).toBe(1);
-      expect(occurrences(content, NOOBI_HOST_RUNTIME_POLICY_END)).toBe(1);
+      expect(occurrences(content, GU_HOST_RUNTIME_POLICY_START)).toBe(1);
+      expect(occurrences(content, GU_HOST_RUNTIME_POLICY_END)).toBe(1);
       expectManagedMediaPolicy(content);
     }
-    expect(agentsAfter.startsWith(NOOBI_HOST_RUNTIME_POLICY_START)).toBe(true);
+    expect(agentsAfter.startsWith(GU_HOST_RUNTIME_POLICY_START)).toBe(true);
     expect(agentsAfter.endsWith(legacyAgents)).toBe(true);
-    expect(skillAfter.startsWith(`${skillFrontMatter}\n\n${NOOBI_HOST_RUNTIME_POLICY_START}`)).toBe(true);
+    expect(skillAfter.startsWith(`${skillFrontMatter}\n\n${GU_HOST_RUNTIME_POLICY_START}`)).toBe(true);
     expect(skillAfter.endsWith(legacySkillBody)).toBe(true);
     expect(occurrences(agentsAfter, 'USER_AGENTS_LEGACY_SENTINEL')).toBe(1);
     expect(occurrences(skillAfter, 'USER_SKILL_LEGACY_SENTINEL')).toBe(1);
     const metadata = JSON.parse(
-      await readFile(join(root, '.noobi/project.json'), 'utf8'),
+      await readFile(join(root, '.gu/project.json'), 'utf8'),
     ) as Record<string, unknown>;
     expect(metadata.targetFrameRate).toBe(60);
   });
 
   it('fails closed on a workspace symlink before changing authoritative metadata', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-policy-symlink-'));
-    const externalRoot = await mkdtemp(join(tmpdir(), 'noobi-policy-external-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-policy-symlink-'));
+    const externalRoot = await mkdtemp(join(tmpdir(), 'gu-policy-external-'));
     temporaryRoots.push(root, externalRoot);
     const project = {
       id: 'project-policy-symlink',
@@ -427,13 +427,13 @@ describe('createWorkspaceTemplate', () => {
 
     expect(await readFile(externalAgents, 'utf8')).toBe('EXTERNAL_SENTINEL\n');
     const metadata = JSON.parse(
-      await readFile(join(root, '.noobi/project.json'), 'utf8'),
+      await readFile(join(root, '.gu/project.json'), 'utf8'),
     ) as Record<string, unknown>;
     expect(metadata.targetFrameRate).toBe(30);
   });
 
   it('refuses to overwrite an existing workspace template', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-template-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-template-'));
     temporaryRoots.push(root);
     const project = {
       id: 'project-existing',
@@ -454,14 +454,14 @@ function occurrences(source: string, needle: string): number {
 
 function expectManagedMediaPolicy(source: string): void {
   const policy = managedPolicyOf(source);
-  expect(policy).toContain(`managed, v${NOOBI_HOST_RUNTIME_POLICY_VERSION}`);
+  expect(policy).toContain(`managed, v${GU_HOST_RUNTIME_POLICY_VERSION}`);
   expect(policy).toContain(
-    `Managed host policy version: \`${NOOBI_HOST_RUNTIME_POLICY_VERSION}\``,
+    `Managed host policy version: \`${GU_HOST_RUNTIME_POLICY_VERSION}\``,
   );
   expect(policy).toContain('enabled MiniMax Music service');
   expect(policy).toContain('at least one MiniMax-generated music track');
   expect(policy).toContain('planning role cannot call its tool');
-  expect(policy).toContain('`noobi_audio_generate` with `purpose=music`');
+  expect(policy).toContain('`gu_audio_generate` with `purpose=music`');
   expect(policy).toContain('exist under `public/assets/audio/`');
   expect(policy).toContain('loaded and played by production game code');
   expect(policy).toContain('Never silently substitute procedural or synthesized audio');
@@ -473,26 +473,26 @@ function expectManagedMediaPolicy(source: string): void {
   expect(policy).toContain('### Interaction-motion acceptance');
   expect(policy).toContain('must span rendered frames');
   expect(policy).toContain('### Experience playtest acceptance');
-  expect(policy).toContain('`.noobi/playtest.json` at schemaVersion 1');
+  expect(policy).toContain('`.gu/playtest.json` at schemaVersion 1');
   expect(policy).toContain('start, move, primary, pause, and restart');
   expect(policy).toContain('`artifacts/playtest/` is host-owned immutable evidence');
   expect(policy).toContain('host playtest as pending');
 }
 
 function managedPolicyOf(source: string): string {
-  const start = source.indexOf(NOOBI_HOST_RUNTIME_POLICY_START);
-  const end = source.indexOf(NOOBI_HOST_RUNTIME_POLICY_END, start);
+  const start = source.indexOf(GU_HOST_RUNTIME_POLICY_START);
+  const end = source.indexOf(GU_HOST_RUNTIME_POLICY_END, start);
   if (start < 0 || end < 0) throw new Error('Managed policy is missing in test fixture');
-  return source.slice(start, end + NOOBI_HOST_RUNTIME_POLICY_END.length);
+  return source.slice(start, end + GU_HOST_RUNTIME_POLICY_END.length);
 }
 
 function withoutManagedPolicy(source: string): string {
   let result = source;
   while (true) {
-    const start = result.indexOf(NOOBI_HOST_RUNTIME_POLICY_START);
+    const start = result.indexOf(GU_HOST_RUNTIME_POLICY_START);
     if (start < 0) return result;
-    const end = result.indexOf(NOOBI_HOST_RUNTIME_POLICY_END, start);
+    const end = result.indexOf(GU_HOST_RUNTIME_POLICY_END, start);
     if (end < 0) throw new Error('Malformed managed policy in test fixture');
-    result = result.slice(0, start) + result.slice(end + NOOBI_HOST_RUNTIME_POLICY_END.length);
+    result = result.slice(0, start) + result.slice(end + GU_HOST_RUNTIME_POLICY_END.length);
   }
 }

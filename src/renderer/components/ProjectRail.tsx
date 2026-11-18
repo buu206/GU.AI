@@ -148,10 +148,10 @@ export function ProjectRail({
                 <PanelLeftOpen className="brand-toggle-icon" size={19} aria-hidden="true" />
               </button>
             ) : (
-              <div className="brand is-static" aria-label="Noobi.ai">
-                <span className="brand-monogram" aria-hidden="true">N</span>
+              <div className="brand is-static" aria-label="GU.AI">
+                <span className="brand-monogram" aria-hidden="true">G</span>
                 <span className="brand-copy">
-                  <strong>Noobi.ai</strong>
+                  <strong>GU.AI</strong>
                   <small>AI GAME STUDIO</small>
                 </span>
               </div>
@@ -164,9 +164,9 @@ export function ProjectRail({
               title={collapsed ? '展开首页侧栏' : '返回首页'}
               onClick={collapsed ? onToggleCollapse : onHome}
             >
-              {collapsed ? <span className="brand-monogram" aria-hidden="true">N</span> : null}
+              {collapsed ? <span className="brand-monogram" aria-hidden="true">G</span> : null}
               <span className="brand-copy">
-                <strong>Noobi.ai</strong>
+                <strong>GU.AI</strong>
                 <small>AI GAME STUDIO</small>
               </span>
             </button>
@@ -193,7 +193,7 @@ export function ProjectRail({
           </button>
         </div>
 
-        <nav className="rail-primary-navigation" aria-label="Noobi 导航">
+        <nav className="rail-primary-navigation" aria-label="GU 导航">
           <button className={variant === 'dashboard' ? 'is-active' : ''} type="button" onClick={onHome}>
             <Home size={17} />
             <span>首页</span>
@@ -276,7 +276,7 @@ export function ProjectRail({
               {project.icon ? (
                 <ProjectIconImage project={project} className="project-icon-img" />
               ) : (
-                <span>{project.name.trim().slice(0, 1).toUpperCase() || 'N'}</span>
+                <span>{project.name.trim().slice(0, 1).toUpperCase() || 'G'}</span>
               )}
               <i className={`status-dot status-${project.status}`} />
             </button>

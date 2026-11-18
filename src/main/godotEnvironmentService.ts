@@ -313,7 +313,7 @@ export class GodotEnvironmentService {
         ? `Godot ${version} 已就绪。`
         : state === 'incompatible'
           ? version
-            ? `检测到 Godot ${version}；Noobi.ai 当前需要 Godot 4.x。`
+            ? `检测到 Godot ${version}；GU.AI 当前需要 Godot 4.x。`
             : '该文件可以运行，但没有返回有效的 Godot 版本。'
           : result.timedOut
             ? '读取 Godot 版本超时。'
@@ -514,9 +514,9 @@ async function automaticCandidates(
   homeDirectory: string,
 ): Promise<GodotCandidate[]> {
   const candidates: GodotCandidate[] = [];
-  if (environment.NOOBI_GODOT_BIN) {
+  if (environment.GU_GODOT_BIN) {
     try {
-      candidates.push(...await configuredCandidates(environment.NOOBI_GODOT_BIN, platform, 'environment'));
+      candidates.push(...await configuredCandidates(environment.GU_GODOT_BIN, platform, 'environment'));
     } catch {
       // A malformed optional override must not prevent ordinary discovery.
     }

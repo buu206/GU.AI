@@ -10,15 +10,15 @@ import {
 } from '../dist/main/gameplayExperienceEvaluator.js';
 import { PreviewServer } from '../dist/main/previewServer.js';
 
-const smokeResultPath = process.env.NOOBI_PLAYTEST_SMOKE_RESULT?.trim() || null;
-const keepSmokeWorkspace = process.env.NOOBI_PLAYTEST_SMOKE_KEEP === '1';
+const smokeResultPath = process.env.GU_PLAYTEST_SMOKE_RESULT?.trim() || null;
+const keepSmokeWorkspace = process.env.GU_PLAYTEST_SMOKE_KEEP === '1';
 
 const GAME_HTML = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Noobi playtest smoke</title>
+  <title>GU playtest smoke</title>
   <style>
     html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071018}
     body{display:grid;place-items:center}canvas{width:min(92vw,900px);height:auto;border:2px solid #5de4a3}
@@ -76,7 +76,7 @@ const GAME_HTML = `<!doctype html>
         context.beginPath(); context.arc(x, 280 + bob, 36 + (1 - pulse) * 80, 0, Math.PI * 2); context.stroke();
       }
       context.fillStyle = '#f6f2e8'; context.font = '700 24px sans-serif';
-      context.fillText('NOOBI PLAYTEST', 28, 44);
+      context.fillText('GU PLAYTEST', 28, 44);
       context.font = '18px sans-serif';
       context.fillText('Enter start · D move · Space action · Esc pause · R restart', 28, 78);
       if (mode !== 'playing') {
@@ -132,12 +132,12 @@ const preview = new PreviewServer();
 
 try {
   await app.whenReady();
-  root = await mkdtemp(join(tmpdir(), 'noobi-playtest-smoke-'));
+  root = await mkdtemp(join(tmpdir(), 'gu-playtest-smoke-'));
   await mkdir(join(root, 'dist'), { recursive: true });
-  await mkdir(join(root, '.noobi'), { recursive: true });
+  await mkdir(join(root, '.gu'), { recursive: true });
   await writeFile(join(root, 'dist/index.html'), GAME_HTML);
   await writeFile(
-    join(root, '.noobi/playtest.json'),
+    join(root, '.gu/playtest.json'),
     `${JSON.stringify(playtestManifest(new Date().toISOString()), null, 2)}\n`,
   );
   const previewUrl = await preview.start('playtest-smoke', root, {
@@ -177,7 +177,7 @@ try {
   if (smokeResultPath) {
     await writeFile(smokeResultPath, `${JSON.stringify({ ok: true, root, report }, null, 2)}\n`);
   }
-  process.stdout.write(`Noobi experience playtest passed: ${report.score}/100 · ${report.durationMs}ms\n`);
+  process.stdout.write(`GU experience playtest passed: ${report.score}/100 · ${report.durationMs}ms\n`);
 } catch (error) {
   const message = error instanceof Error ? error.stack ?? error.message : String(error);
   if (smokeResultPath) {

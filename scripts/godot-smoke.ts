@@ -5,7 +5,7 @@ import { GodotEnvironmentService } from '../src/main/godotEnvironmentService.js'
 import { PreviewServer } from '../src/main/previewServer.js';
 import { ProjectStore } from '../src/main/projectStore.js';
 
-const root = await mkdtemp(join(tmpdir(), 'noobi-godot-smoke-'));
+const root = await mkdtemp(join(tmpdir(), 'gu-godot-smoke-'));
 
 try {
   const environment = new GodotEnvironmentService({
@@ -24,8 +24,8 @@ try {
     defaultWorkspace: join(root, 'games'),
   });
   const project = await store.create({
-    name: 'Noobi Godot Smoke',
-    idea: 'Verify the real Noobi Godot starter, validation, and Web export pipeline.',
+    name: 'GU Godot Smoke',
+    idea: 'Verify the real GU Godot starter, validation, and Web export pipeline.',
     parentDirectory: join(root, 'games'),
     model: null,
     engine: 'godot',
@@ -77,7 +77,7 @@ try {
 
   process.stdout.write(
     [
-      'Noobi Godot smoke passed',
+      'GU Godot smoke passed',
       'engine=' + status.tool.version,
       'project=' + project.engine,
       'artifacts=' + exported.artifacts.length,

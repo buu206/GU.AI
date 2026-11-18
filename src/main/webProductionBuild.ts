@@ -17,6 +17,7 @@ const EXCLUDED_INPUT_DIRECTORIES = new Set([
   '.vite',
   '.cache',
   '.git',
+  '.gu',
   '.noobi',
   '.codex',
   '.idea',

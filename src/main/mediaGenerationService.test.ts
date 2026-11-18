@@ -47,7 +47,7 @@ describe('media generation service', () => {
   });
 
   it('exports and registers a real animated Three.js GLB when no 3D provider is configured', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-threejs-fallback-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-threejs-fallback-'));
     roots.push(root);
     const providerStore = { withActiveProvider: vi.fn(async () => null) };
     const fetchMock = vi.fn();
@@ -73,7 +73,7 @@ describe('media generation service', () => {
         kind: 'model3d',
         source: 'procedural',
         mimeType: 'model/gltf-binary',
-        provider: 'Noobi:Three.js Procedural GLB',
+        provider: 'GU:Three.js Procedural GLB',
         metadata: {
           route: 'threejs-fallback',
           generator: 'threejs-procedural-v1',
@@ -131,9 +131,9 @@ describe('media generation service', () => {
     });
     expect(fetchMock).toHaveBeenCalledOnce();
 
-    const failedRoot = await mkdtemp(join(tmpdir(), 'noobi-threejs-no-silent-fallback-'));
+    const failedRoot = await mkdtemp(join(tmpdir(), 'gu-threejs-no-silent-fallback-'));
     roots.push(failedRoot);
-    const failedStore = new MediaProviderStore(join(failedRoot, '.noobi-private', 'providers.json'), fakeSecretCodec());
+    const failedStore = new MediaProviderStore(join(failedRoot, '.gu-private', 'providers.json'), fakeSecretCodec());
     await failedStore.init();
     await failedStore.upsert({
       presetId: 'custom-model3d',
@@ -801,9 +801,9 @@ async function configuredStore(input: {
   endpoint?: string;
   apiKey: string;
 }): Promise<{ root: string; providerStore: MediaProviderStore }> {
-  const root = await mkdtemp(join(tmpdir(), 'noobi-generation-test-'));
+  const root = await mkdtemp(join(tmpdir(), 'gu-generation-test-'));
   roots.push(root);
-  const providerStore = new MediaProviderStore(join(root, '.noobi-private', 'providers.json'), fakeSecretCodec());
+  const providerStore = new MediaProviderStore(join(root, '.gu-private', 'providers.json'), fakeSecretCodec());
   await providerStore.init();
   await providerStore.upsert({ ...input, setActive: true });
   return { root, providerStore };

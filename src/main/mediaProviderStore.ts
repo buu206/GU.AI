@@ -289,7 +289,7 @@ const MAX_API_KEY_LENGTH = 16_384;
 const MAX_SEALED_API_KEY_LENGTH = 128 * 1024;
 const MAX_TEXT_LENGTH = 500;
 // Newlines are forbidden in API keys, so a legacy raw key cannot be confused with a bound payload.
-const BOUND_API_KEY_PREFIX = 'noobi-media-provider-secret\nv1\n';
+const BOUND_API_KEY_PREFIX = 'gu-media-provider-secret\nv1\n';
 
 /**
  * App-private provider persistence. Public methods expose only redacted summaries;
@@ -643,9 +643,12 @@ function openApiKey(
   } catch {
     throw new Error('Stored API key ciphertext could not be decrypted');
   }
-  if (typeof plaintext === 'string' && plaintext.startsWith(BOUND_API_KEY_PREFIX)) {
+  const prefix = typeof plaintext === 'string'
+    ? [BOUND_API_KEY_PREFIX, 'noobi-media-provider-secret\nv1\n'].find((value) => (plaintext as string).startsWith(value))
+    : undefined;
+  if (prefix && typeof plaintext === 'string') {
     return {
-      apiKey: parseBoundApiKeyPayload(plaintext.slice(BOUND_API_KEY_PREFIX.length), expectedBinding),
+      apiKey: parseBoundApiKeyPayload(plaintext.slice(prefix.length), expectedBinding),
       legacy: false,
     };
   }

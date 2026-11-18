@@ -1,6 +1,8 @@
-# Contributing to Noobi.ai
+# Contributing to GU.AI
 
-Thanks for helping make Noobi.ai safer, more portable and easier to extend. Focused pull requests are the easiest to review and merge.
+Thanks for helping make GU.AI safer, more portable and easier to extend. Focused pull requests are the easiest to review and merge.
+
+Before contributing or redistributing, read [the licensing status](NOTICE.md). The upstream project has not published an open-source license.
 
 ## Good places to contribute
 
@@ -18,8 +20,8 @@ For larger features or behavior changes, open a proposal issue before investing 
 You need macOS, Node.js 22 LTS, npm, and a ChatGPT/Codex account for real Agent smoke tests.
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/Noobi.ai.git
-cd Noobi.ai
+git clone https://github.com/YOUR-USERNAME/GU.AI.git
+cd GU.AI
 npm ci
 npm run dev
 ```
@@ -27,7 +29,7 @@ npm run dev
 Keep your fork current without rewriting shared history:
 
 ```bash
-git remote add upstream https://github.com/Innate-Labs/Noobi.ai.git
+git remote add upstream https://github.com/buu206/GU.AI.git
 git fetch upstream
 git rebase upstream/main
 ```
@@ -53,7 +55,7 @@ Run the full local gate before opening a pull request:
 npm run verify
 ```
 
-This runs both TypeScript configurations, 124 tests, and the production build. Run the isolated UI capture when changing the workbench:
+This runs both TypeScript configurations, the unit test suite, and the production build. Run the isolated UI capture when changing the workbench:
 
 ```bash
 npm run smoke:ui

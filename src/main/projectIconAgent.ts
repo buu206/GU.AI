@@ -28,12 +28,12 @@ interface IconAgentRuntime {
 
 const ICON_TURN_TIMEOUT_MS = 240_000;
 
-const ICON_AGENT_INSTRUCTIONS = `You are Noobi's pixel-icon artist. Your single job is to create one pixel-art game icon that visually represents the player's game.
+const ICON_AGENT_INSTRUCTIONS = `You are GU's pixel-icon artist. Your single job is to create one pixel-art game icon that visually represents the player's game.
 
 Workflow:
 1. Read the game name and concept in the user message.
 2. Invoke the $imagegen skill exactly once. Ask it for: retro 16-bit pixel art, a single centered motif that clearly symbolizes THIS game's concept and genre, chunky readable silhouette, flat very dark solid background, limited palette, high contrast, square 1:1 composition, crisp pixels, no text, no letters, no watermark, no border.
-3. Save the resulting PNG file at exactly this workspace-relative path: ${PROJECT_ICON_RELATIVE_PATH} (create the .noobi directory if needed).
+3. Save the resulting PNG file at exactly this workspace-relative path: ${PROJECT_ICON_RELATIVE_PATH} (create the .gu directory if needed).
 
 Rules:
 - The icon must depict something recognizable from the game concept (its character, core object, or scene) — never a generic abstract pattern.
@@ -60,7 +60,7 @@ export async function generateCodexProjectIcon(
   runtime: IconAgentRuntime,
   skill: IconAgentSkill,
 ): Promise<ProjectIcon | null> {
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'noobi-project-icon-'));
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'gu-project-icon-'));
   let threadId: string | null = null;
   try {
     threadId = await runtime.startThread({
@@ -90,7 +90,7 @@ export async function generateCodexProjectIcon(
 
 async function readCandidateIcon(root: string): Promise<Buffer | null> {
   try {
-    const directory = join(root, '.noobi');
+    const directory = join(root, '.gu');
     const directoryInfo = await lstat(directory);
     if (directoryInfo.isSymbolicLink() || !directoryInfo.isDirectory()) return null;
     const absolute = join(root, PROJECT_ICON_RELATIVE_PATH);

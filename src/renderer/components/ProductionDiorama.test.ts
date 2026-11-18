@@ -4,24 +4,24 @@ import { describe, expect, it } from 'vitest';
 
 import {
   configuredProductionCrewMembers,
-  noobiGroundShadowProfile,
+  guGroundShadowProfile,
   ProductionDiorama,
 } from './ProductionDiorama';
 
-describe('Noobi ground shadow profiles', () => {
+describe('GU ground shadow profiles', () => {
   it('uses a slightly wider shadow while the actor is walking', () => {
-    expect(noobiGroundShadowProfile('walk', 'walking')).toBe('walking');
-    expect(noobiGroundShadowProfile('carry', 'walking')).toBe('walking');
+    expect(guGroundShadowProfile('walk', 'walking')).toBe('walking');
+    expect(guGroundShadowProfile('carry', 'walking')).toBe('walking');
   });
 
   it('uses a wide, flat contact shadow for the horizontal sleep pose', () => {
-    expect(noobiGroundShadowProfile('sleep', 'acting')).toBe('sleeping');
+    expect(guGroundShadowProfile('sleep', 'acting')).toBe('sleeping');
   });
 
   it('keeps every other action on a stable standing shadow', () => {
-    expect(noobiGroundShadowProfile('idle', 'acting')).toBe('standing');
-    expect(noobiGroundShadowProfile('paint', 'acting')).toBe('standing');
-    expect(noobiGroundShadowProfile('celebrate', 'acting')).toBe('standing');
+    expect(guGroundShadowProfile('idle', 'acting')).toBe('standing');
+    expect(guGroundShadowProfile('paint', 'acting')).toBe('standing');
+    expect(guGroundShadowProfile('celebrate', 'acting')).toBe('standing');
   });
 
   it('renders four independently identified crew members in crew mode with one primary shadow', () => {
@@ -39,10 +39,10 @@ describe('Noobi ground shadow profiles', () => {
     for (const role of ['planner', 'artist', 'engineer', 'tester']) {
       expect(markup).toContain(`data-crew-role="${role}"`);
     }
-    expect(markup.match(/data-noobi-ground-shadow="main"/gu)).toHaveLength(1);
-    expect(markup).toContain('data-noobi-ground-shadow="planner"');
-    expect(markup).toContain('data-noobi-ground-shadow="artist"');
-    expect(markup).toContain('data-noobi-ground-shadow="tester"');
+    expect(markup.match(/data-gu-ground-shadow="main"/gu)).toHaveLength(1);
+    expect(markup).toContain('data-gu-ground-shadow="planner"');
+    expect(markup).toContain('data-gu-ground-shadow="artist"');
+    expect(markup).toContain('data-gu-ground-shadow="tester"');
   });
 
   it('can render a compact two-person crew while retaining the active specialist', () => {
@@ -78,9 +78,9 @@ describe('Noobi ground shadow profiles', () => {
     expect(markup).toContain('data-stage-mode="solo"');
     expect(markup).toContain('data-runtime-scene="starforge"');
     expect(markup).toContain('data-scene-mode="solo"');
-    expect(markup).toContain('data-noobi-member-pack="hellokitty"');
-    expect(markup).not.toContain('data-noobi-member-pack="twilight"');
-    expect(markup).not.toContain('collaboration/scene.png');
+    expect(markup).toContain('data-gu-member-pack="hellokitty"');
+    expect(markup).not.toContain('data-gu-member-pack="twilight"');
+    expect(markup).not.toContain('class="workshop-occluder"');
   });
 
   it('renders each configured role with its selected character pack', () => {
@@ -97,27 +97,34 @@ describe('Noobi ground shadow profiles', () => {
     }));
 
     expect(markup).toContain('data-crew-size="3"');
-    expect(markup).toContain('data-noobi-member-pack="twilight"');
-    expect(markup).toContain('data-noobi-member-pack="hellokitty"');
-    expect(markup).toContain('data-noobi-member-pack="starforge"');
-    expect(markup).not.toContain('data-noobi-member-pack="classic"');
+    expect(markup).toContain('data-gu-member-pack="twilight"');
+    expect(markup).toContain('data-gu-member-pack="hellokitty"');
+    expect(markup).toContain('data-gu-member-pack="starforge"');
+    expect(markup).not.toContain('data-gu-member-pack="classic"');
   });
 
-  it('renders the baked fishing runtime scene without duplicate crew or workshop occluders', () => {
+  it('renders the cyber rooftop with the actual configured crew and no old workshop occluders', () => {
+    const crew = [
+      { packId: 'twilight', role: 'planner' },
+      { packId: 'starforge', role: 'engineer' },
+    ] as const;
     const markup = renderToStaticMarkup(createElement(ProductionDiorama, {
       stage: 'world',
       status: 'running',
       stageMode: 'crew',
       sceneId: 'fishing',
+      crew,
     }));
 
     expect(markup).toContain('data-runtime-scene="fishing"');
     expect(markup).toContain('data-scene-mode="fishing"');
-    expect(markup).toContain('four-ip-fishing.gif');
-    expect(markup).toContain('NOOBI WORKING');
+    expect(markup).toContain('data-cyber-art');
+    expect(markup).toContain('GAME//OS WORKING');
     expect(markup).not.toContain('class="workshop-occluder"');
-    expect(markup).not.toContain('data-noobi-member-pack=');
-    expect(markup).not.toContain('data-crew-role=');
+    expect(markup).not.toContain('four-ip-fishing.gif');
+    expect(markup.match(/data-crew-role=/gu)).toHaveLength(2);
+    expect(markup).toContain('data-gu-member-pack="twilight"');
+    expect(markup).toContain('data-gu-member-pack="starforge"');
   });
 
   it('promotes the configured lead when the stage specialist is absent', () => {

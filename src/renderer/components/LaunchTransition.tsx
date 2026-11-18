@@ -1,7 +1,9 @@
 import React from 'react';
 
-import walkFrameA from '../assets/noobi-packs/classic/frames/sprite-walk-a-a.png';
-import walkFrameB from '../assets/noobi-packs/classic/frames/sprite-walk-a-b.png';
+import { cyberSpriteFrame } from '../cyberArtAssets';
+
+const walkFrameA = cyberSpriteFrame('classic', 'walk', 0);
+const walkFrameB = cyberSpriteFrame('classic', 'walk', 1);
 
 export type LaunchTransitionPhase = 'running' | 'leaving';
 
@@ -18,8 +20,8 @@ export function LaunchTransition({ phase }: LaunchTransitionProps) {
       aria-label="正在进入游戏制作工作台"
     >
       <div className="launch-transition-copy">
-        <strong>正在建立 New Game</strong>
-        <span>鸭嘴兽正把创意送进制作工作台</span>
+        <strong>正在进入制作台</strong>
+        <span>GAME//OS · 像素游侠就位</span>
       </div>
       <div className="launch-transition-track" aria-hidden="true">
         <span className="launch-transition-runner">

@@ -1,0 +1,124 @@
+/* Project apps share the home desktop's chrome; these tokens stay dark in light OS mode. */
+#game-desktop.production-desktop {
+  color-scheme: dark;
+  --bg: #100d24; --panel: #1b1531; --panel-raised: #251c3c; --panel-hover: #39264c;
+  --line: #513d69; --line-strong: #87649f; --text: #ece5f8; --text-soft: #d1bfdf;
+  --muted: #b1a3c8; --faint: #a18db9; --accent: #8cfbea; --accent-soft: #8cfbea12; --accent-ink: #103b3e;
+  --green: #8cfbea; --red: #f79bba; --blue: #babafa;
+  --studio-bg: #100d24; --studio-surface: #1b1531; --studio-surface-raised: #251c3c;
+  --studio-border: #513d69; --studio-text: #ece5f8; --studio-muted: #b1a3c8;
+  --studio-accent: #8cfbea; --studio-accent-ink: #103b3e;
+  --sans: var(--pixel-cjk); --mono: var(--pixel-cjk);
+  --glass-surface: #1b1531; --glass-surface-strong: #251c3c; --glass-border: #513d69;
+  --glass-chip: #251c3c; --glass-chip-hover: #39264c; --glass-control: #100d24;
+}
+#game-desktop .production-home { background: none; border: 0; padding: 0; color: var(--desktop-cyan); font-size: 20px; white-space: nowrap; }
+#game-desktop .production-project-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--desktop-text); }
+#game-desktop .production-status { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 16px; }
+#game-desktop.production-desktop .desktop-menubar { gap: 20px; }
+#game-desktop.production-desktop .desktop-window-body { overflow: auto; }
+#game-desktop.production-desktop .production-center,
+#game-desktop.production-desktop .studio-canvas { display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 0; gap: 0; background: var(--desktop-panel); border: 0; border-radius: 0; box-shadow: none; overflow: hidden; }
+#game-desktop.production-desktop .production-center { min-height: 570px; }
+#game-desktop.production-desktop .studio-canvas { min-height: 330px; }
+#game-desktop.production-desktop :is(.agent-pane-heading,.creation-ready,.composer,.composer-body,.composer-toolbar,.brief-card,.event-card,.inspector,.inspector-tabs,.inspector-toolbar,.inspector-footer,.file-tree,.code-viewer,.asset-card,.asset-empty,.asset-studio,.experience-report,.inspector-crew-panel) {
+  border-radius: 0; background: var(--desktop-panel); color: var(--desktop-text); border-color: var(--desktop-edge); box-shadow: none; backdrop-filter: none;
+}
+#game-desktop.production-desktop :is(.production-center,.studio-canvas) :is(button,select,input,textarea,pre,code) { font-family: var(--pixel-cjk), monospace; }
+#game-desktop.production-desktop :is(.production-center,.studio-canvas) :is(button,select) { border-radius: 0; }
+#game-desktop.production-desktop .agent-pane-heading { flex: 0 0 auto; padding: 14px 18px; border-bottom: 2px solid var(--line); }
+#game-desktop.production-desktop .agent-pane-heading > div > span { display: none; }
+#game-desktop.production-desktop .agent-project-name { font-size: 24px; color: var(--desktop-text); }
+#game-desktop.production-desktop .agent-pane-heading small { font-size: 15px; color: var(--desktop-muted); margin-top: 4px; }
+#game-desktop.production-desktop .status-chip { color: var(--desktop-cyan); background: #8cfbea0a; border: 1px solid #557e82; border-radius: 0; font-size: 14px; }
+#game-desktop.production-desktop .creation-ready { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 15px 18px; border-bottom: 2px solid var(--line); background: #251b3a; }
+#game-desktop.production-desktop .creation-ready > div { flex: 1 1 250px; }
+#game-desktop.production-desktop .creation-ready strong { font-size: 20px; color: var(--desktop-pink); }
+#game-desktop.production-desktop .creation-ready p { font-size: 15px; line-height: 1.45; margin: 6px 0; }
+#game-desktop.production-desktop .creation-ready label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; }
+#game-desktop.production-desktop select { max-width: 100%; min-width: 0; padding: 6px; background: #100d24; border: 1px solid var(--desktop-edge); color: var(--desktop-text); }
+#game-desktop.production-desktop .primary-button { padding: 10px 20px; border: 3px solid #c8fff5; border-right-color: #376b70; border-bottom-color: #376b70; color: #123d40; background: var(--desktop-cyan); font-size: 21px; box-shadow: 3px 3px 0 #0b081a; }
+#game-desktop.production-desktop .event-stream { flex: 1 1 130px; min-height: 100px; padding: 14px; background: #120e22; scrollbar-color: #795997 #120e22; }
+#game-desktop.production-desktop .brief-card { padding: 14px; border: 1px solid var(--line); background: #1c1630; margin-bottom: 16px; }
+#game-desktop.production-desktop .brief-card .eyebrow { font-size: 13px; color: var(--desktop-pink); }
+#game-desktop.production-desktop .brief-card h2 { font-size: 20px; margin: 7px 0; }
+#game-desktop.production-desktop .brief-card p { font-size: 16px; color: var(--desktop-muted); }
+#game-desktop.production-desktop .brief-card footer { display: none; }
+#game-desktop.production-desktop .event-card { border: 1px solid var(--line); padding: 12px; }
+#game-desktop.production-desktop .event-card pre { font-size: 16px; line-height: 1.6; color: var(--desktop-text); }
+#game-desktop.production-desktop .event-card header { font-size: 14px; }
+#game-desktop.production-desktop .event-card :is(code,.event-kind),
+#game-desktop.production-desktop .event-rail > span { border-radius: 0; background: #302143; color: var(--desktop-cyan); }
+#game-desktop.production-desktop .event-expand { color: var(--desktop-cyan); }
+#game-desktop.production-desktop .stream-empty { padding: 12px; gap: 7px; }
+#game-desktop.production-desktop .stream-empty :is(strong,p) { font-size: 16px; }
+#game-desktop.production-desktop .composer { flex: 0 0 auto; margin: 0; padding: 12px; border-top: 2px solid var(--line); }
+#game-desktop.production-desktop .composer-body { border: 2px solid var(--desktop-edge); overflow: hidden; }
+#game-desktop.production-desktop .composer-context { padding: 10px 12px; color: var(--desktop-cyan); font-size: 16px; }
+#game-desktop.production-desktop .composer-context > span:last-child { display: none; }
+#game-desktop.production-desktop .composer textarea { min-height: 70px; max-height: 160px; padding: 10px 12px; background: #100d24; color: var(--desktop-text); font-size: 18px; line-height: 1.5; }
+#game-desktop.production-desktop .composer-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 9px; border-top: 1px solid var(--line); }
+#game-desktop.production-desktop .composer-controls { flex: 1; justify-content: flex-end; gap: 7px; min-width: 0; }
+#game-desktop.production-desktop .composer-controls label { min-width: 0; }
+#game-desktop.production-desktop .composer-controls select { font-size: 14px; }
+#game-desktop.production-desktop .composer-action { width: 36px; height: 36px; flex: 0 0 36px; border: 2px outset #b6fff4; background: var(--desktop-cyan); color: #103b3e; }
+#game-desktop.production-desktop .composer-action.is-stop { background: var(--desktop-pink); border-color: #ffd4f3; }
+#game-desktop.production-desktop .asset-requirement-chip { background: #302143; color: var(--desktop-muted); border-radius: 0; font-size: 13px; padding: 5px; }
+#game-desktop.production-desktop .pipeline { flex: 0 0 auto; padding: 10px; background: #160f29; border-bottom: 2px solid var(--desktop-edge); }
+#game-desktop.production-desktop .pipeline ol { gap: 4px; overflow-x: auto; scrollbar-width: thin; }
+#game-desktop.production-desktop .pipeline li { border: 1px solid var(--line); border-radius: 0; background: #211831; padding: 8px 10px; gap: 5px; min-width: max-content; color: var(--desktop-muted); }
+#game-desktop.production-desktop .pipeline li.is-active { color: var(--desktop-cyan); border-color: var(--desktop-cyan); background: #17343c; }
+#game-desktop.production-desktop .pipeline li.is-done { color: var(--desktop-pink); }
+#game-desktop.production-desktop .pipeline li strong { font-size: 15px; font-weight: 400; }
+#game-desktop.production-desktop .pipeline li > svg { display: none; }
+#game-desktop.production-desktop .pipeline-number { display: inline; font-size: 13px; }
+#game-desktop.production-desktop .inspector { flex: 1; min-height: 0; margin: 0; border: 0; }
+#game-desktop.production-desktop .inspector-tabs { flex: 0 0 auto; border-bottom: 2px solid var(--line); padding: 8px 10px 0; gap: 6px; }
+#game-desktop.production-desktop .inspector-tabs button { min-height: 40px; padding: 8px; border: 2px solid var(--desktop-edge); border-bottom: 0; background: #281b3c; color: var(--desktop-muted); font-size: 17px; }
+#game-desktop.production-desktop .inspector-tabs button.is-active { background: #413054; color: var(--desktop-cyan); border-color: #ad91bf; }
+#game-desktop.production-desktop .inspector-tabs button::after { display: none; }
+#game-desktop.production-desktop .inspector-tabs button span { border-radius: 0; font-size: 13px; background: #100d24; }
+#game-desktop.production-desktop .inspector-toolbar { min-height: 44px; padding: 7px 12px; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+#game-desktop.production-desktop .inspector-toolbar > span:first-child { font-size: 13px; color: var(--desktop-muted); }
+#game-desktop.production-desktop :is(.inspector-solo-indicator,.inspector-crew-toggle) { background: #281b3c; border: 1px solid var(--desktop-edge); border-radius: 0; color: var(--desktop-pink); }
+#game-desktop.production-desktop .preview-pane { min-height: 0; background: #100d24; }
+#game-desktop.production-desktop .inspector-footer { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 14px; }
+#game-desktop.production-desktop .file-browser { min-height: 0; }
+#game-desktop.production-desktop .file-tree button { font-size: 15px; color: var(--desktop-muted); }
+#game-desktop.production-desktop .file-tree button.is-active { background: #342445; color: var(--desktop-cyan); }
+#game-desktop.production-desktop .code-viewer pre { background: #100d24; font-size: 15px; color: var(--desktop-text); }
+#game-desktop.production-desktop .asset-empty { font-size: 17px; }
+#game-desktop.production-desktop .production-standby { position: relative; display: grid; place-items: center; flex: 1; min-height: 160px; overflow: hidden; background: #100d24; }
+#game-desktop .production-standby-scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; opacity: .45; }
+#game-desktop .production-standby::after { content: ''; position: absolute; inset: 0; background: linear-gradient(#100d2433,#100d24cc); pointer-events: none; }
+#game-desktop .production-standby-content { position: relative; z-index: 1; display: flex; align-items: center; flex-direction: column; gap: 14px; padding: 24px; text-align: center; }
+#game-desktop .production-standby-avatar { width: 100px; height: 100px; image-rendering: pixelated; }
+#game-desktop .production-standby-content > span { color: var(--desktop-cyan); font-size: 14px; letter-spacing: 3px; }
+#game-desktop .production-standby-content h2 { font-size: clamp(25px,4cqi,42px); color: #fbecff; overflow-wrap: anywhere; }
+#game-desktop .production-standby-content p { font-size: 20px; color: #d4c2e5; }
+#game-desktop .production-standby-slots { color: var(--desktop-pink); font-size: 24px; letter-spacing: 5px; }
+#game-desktop .production-standby-content small { color: #b8aacb; font-size: 16px; }
+@container (max-width: 450px) {
+  #game-desktop.production-desktop .creation-ready { padding: 12px; gap: 8px; }
+  #game-desktop.production-desktop .creation-ready p { font-size: 14px; }
+  #game-desktop.production-desktop .composer-toolbar > .asset-requirement-chip { display: none; }
+  #game-desktop.production-desktop .inspector-toolbar > span:first-child { display: none; }
+  #game-desktop .production-standby-avatar { width: 72px; height: 72px; }
+  #game-desktop .production-standby-content { gap: 9px; padding: 16px; }
+}
+@media (max-width: 599px) {
+  #game-desktop.production-desktop .production-project-title { display: none; }
+  #game-desktop.production-desktop .desktop-icons > button { font-size: 14px; }
+}
+#game-desktop.production-desktop .desktop-folder i { display: grid; place-items: center; inset: 9px 0 0; font-size: 25px; }
+#game-desktop.production-desktop .production-project-menu { position: relative; min-width: 0; z-index: 10000; }
+#game-desktop.production-desktop .production-project-menu summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; list-style: none; color: var(--desktop-text); }
+#game-desktop.production-desktop .production-project-menu summary::-webkit-details-marker { display: none; }
+#game-desktop.production-desktop .production-project-menu > div { position: absolute; top: 32px; left: 50%; transform: translateX(-50%); min-width: 190px; padding: 5px; background: #30203e; border: 2px solid #a084b7; box-shadow: 4px 4px 0 #100920; }
+#game-desktop.production-desktop .production-project-menu button { display: block; width: 100%; padding: 10px 15px; text-align: left; border: 0; background: transparent; color: var(--desktop-text); }
+#game-desktop.production-desktop .production-project-menu button:hover { background: #67477e; }
+#game-desktop.production-desktop .asset-requirement.is-chip { border-radius: 0; background: #302143; color: var(--desktop-muted); }
+@media (max-width: 599px) {
+  #game-desktop.production-desktop .production-project-menu { max-width: 120px; font-size: 15px; }
+  #game-desktop.production-desktop .production-status { display: none; }
+}

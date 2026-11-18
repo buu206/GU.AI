@@ -9,7 +9,7 @@ import { GodotEnvironmentService } from '../src/main/godotEnvironmentService.js'
 import { MediaGenerationService } from '../src/main/mediaGenerationService.js';
 
 const execute = promisify(execFile);
-const root = await mkdtemp(join(tmpdir(), 'noobi-model3d-smoke-'));
+const root = await mkdtemp(join(tmpdir(), 'gu-model3d-smoke-'));
 
 try {
   const assetStore = new AssetStore();
@@ -20,7 +20,7 @@ try {
   const generated = await media.generate({
     project: { id: 'model3d-smoke', root },
     kind: 'model3d',
-    name: 'noobi_smoke_character',
+    name: 'gu_smoke_character',
     prompt: 'Low-poly game character with readable arms and legs',
     options: { animation: true },
   });
@@ -28,7 +28,7 @@ try {
   if (generated.provider.route !== 'threejs-fallback') throw new Error('3D fallback route was not reported');
 
   await writeFile(join(root, 'project.godot'), `[application]
-config/name="Noobi Model3D Smoke"
+config/name="GU Model3D Smoke"
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
@@ -53,12 +53,12 @@ renderer/rendering_method.mobile="gl_compatibility"
     maxBuffer: 4 * 1024 * 1024,
   });
   const output = `${verified.stdout}\n${verified.stderr}`;
-  if (!output.includes('NOOBI_MODEL3D_SMOKE_OK')) {
+  if (!output.includes('GU_MODEL3D_SMOKE_OK')) {
     throw new Error(`Godot did not confirm the model scene: ${output.slice(0, 2_000)}`);
   }
 
   process.stdout.write([
-    'Noobi 3D route smoke passed',
+    'GU 3D route smoke passed',
     `engine=${status.tool.version}`,
     `route=${generated.provider.route}`,
     `asset=${generated.asset.relativePath}`,
@@ -96,7 +96,7 @@ func _initialize() -> void:
             push_error("Imported GLB is missing animation: " + required_clip)
             quit(5)
             return
-    print("NOOBI_MODEL3D_SMOKE_OK meshes=%d skeletons=%d clips=%s" % [state.meshes, state.skeletons, state.clips.keys()])
+    print("GU_MODEL3D_SMOKE_OK meshes=%d skeletons=%d clips=%s" % [state.meshes, state.skeletons, state.clips.keys()])
     quit(0)
 
 func inspect_node(node: Node, state: Dictionary) -> void:

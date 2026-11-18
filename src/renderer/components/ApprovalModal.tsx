@@ -35,10 +35,10 @@ interface InputQuestion {
 }
 
 const KIND_LABELS: Record<ApprovalRequest['kind'], string> = {
-  command: 'COMMAND APPROVAL',
-  file: 'FILE CHANGE APPROVAL',
-  permissions: 'PERMISSION APPROVAL',
-  input: 'USER INPUT',
+  command: 'PERMISSION.EXE / 命令审批',
+  file: 'PERMISSION.EXE / 文件修改',
+  permissions: 'PERMISSION.EXE / 权限请求',
+  input: 'QUESTION.EXE / 需要你的回答',
 };
 
 export function ApprovalModal({
@@ -143,8 +143,9 @@ export function ApprovalModal({
       <div className="approval-context">
         <ShieldAlert size={20} />
         <div>
-          <span>RUNTIME REQUEST</span>
+          <span>本次请求</span>
           <p>{approval.summary}</p>
+          {typeof approval.details.reason === 'string' && <p className="approval-reason">{approval.details.reason}</p>}
         </div>
       </div>
       {questions.length > 0 ? (
@@ -182,6 +183,7 @@ export function ApprovalModal({
           ))}
         </div>
       ) : null}
+      <details className="approval-technical"><summary>查看请求详情</summary>
       <dl className="approval-meta">
         <div><dt>Method</dt><dd>{approval.method}</dd></div>
         <div><dt>Project</dt><dd>{approval.projectId ?? 'GLOBAL'}</dd></div>
@@ -193,6 +195,7 @@ export function ApprovalModal({
           <pre>{details}</pre>
         </div>
       ) : null}
+      </details>
       {error ? <div className="form-error" role="alert">{error}</div> : null}
     </Modal>
   );

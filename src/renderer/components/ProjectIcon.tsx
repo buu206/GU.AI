@@ -38,7 +38,7 @@ export function ProjectIconImage({
     }
     setLoaded({ key, url: '' });
     let alive = true;
-    window.noobi
+    window.gu
       .getProjectIcon(project.id)
       .then((data) => {
         if (!alive || !data) return;
@@ -54,7 +54,7 @@ export function ProjectIconImage({
   if (!key || !url) {
     return (
       <span className={`${className ?? ''} project-icon-fallback`.trim()} aria-hidden="true">
-        {project.name.trim().slice(0, 1).toUpperCase() || 'N'}
+        {project.name.trim().slice(0, 1).toUpperCase() || 'G'}
       </span>
     );
   }

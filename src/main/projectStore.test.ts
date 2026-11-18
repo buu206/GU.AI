@@ -13,7 +13,7 @@ afterEach(async () => {
 
 describe('ProjectStore renaming', () => {
   it('persists a sidebar display name without moving the workspace directory', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-project-rename-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-project-rename-'));
     roots.push(root);
     const workspace = join(root, 'games');
     const storageFile = join(root, 'project-store.json');
@@ -41,7 +41,7 @@ describe('ProjectStore renaming', () => {
 
 describe('ProjectStore selected workspace directory', () => {
   it('initializes the exact empty folder selected by the user without nesting another directory', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-selected-workspace-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-selected-workspace-'));
     roots.push(root);
     const selectedDirectory = join(root, '鸭嘴兽大战僵尸');
     await mkdir(selectedDirectory);
@@ -59,7 +59,7 @@ describe('ProjectStore selected workspace directory', () => {
   });
 
   it('refuses a non-empty selected folder and preserves the existing files', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-selected-workspace-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-selected-workspace-'));
     roots.push(root);
     const selectedDirectory = join(root, '已有内容');
     await mkdir(selectedDirectory);
@@ -76,7 +76,7 @@ describe('ProjectStore selected workspace directory', () => {
   });
 
   it('recovers a project after its folder is renamed in Finder', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-relocate-workspace-'));
+    const root = await mkdtemp(join(tmpdir(), 'gu-relocate-workspace-'));
     roots.push(root);
     const originalDirectory = join(root, '旧游戏名');
     const renamedDirectory = join(root, '新游戏名');
@@ -96,8 +96,8 @@ describe('ProjectStore selected workspace directory', () => {
     await expect(readFile(join(relocated.root, 'package.json'), 'utf8')).resolves.toContain('"name"');
   });
 
-  it('refuses to reconnect a project to a different NooBi game folder', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'noobi-relocate-workspace-'));
+  it('refuses to reconnect a project to a different GU game folder', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gu-relocate-workspace-'));
     roots.push(root);
     const firstDirectory = join(root, '第一个游戏');
     const secondDirectory = join(root, '第二个游戏');

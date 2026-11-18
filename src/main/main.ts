@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -11,6 +12,7 @@ import {
   nativeImage,
   safeStorage,
   shell,
+  systemPreferences,
   type IpcMainInvokeEvent,
 } from 'electron';
 import type {
@@ -20,6 +22,7 @@ import type {
   ApprovalDecision,
   BootstrapPayload,
   CreateProjectInput,
+  CreateDraftProjectInput,
   EnvironmentStatusSnapshot,
   EnvironmentToolStatus,
   ExtensionSettingsSnapshot,
@@ -29,12 +32,13 @@ import type {
   MediaCapability,
   MediaProviderSetting,
   MediaProviderTestResult,
-  NoobiCrewMember,
+  GuCrewMember,
   PipelineStage,
   PromptTemplateId,
   PromptTemplateSetting,
   ProjectInspectorPayload,
   ProjectIconData,
+  ProjectReadiness,
   ProjectRecord,
   ProjectStatus,
   RunProjectInput,
@@ -44,18 +48,25 @@ import type {
   SkillSetting,
 } from '../shared/contracts.js';
 import {
-  DEFAULT_NOOBI_CREW,
-  isNoobiCrew,
-  isNoobiPackId,
-  isNoobiSceneId,
-  isNoobiStageMode,
-  NOOBI_PACK_IDS,
-  NOOBI_SCENE_IDS,
+  DEFAULT_GU_CREW,
+  isGuCrew,
+  isGuPackId,
+  isGuSceneId,
+  isGuStageMode,
+  GU_PACK_IDS,
+  GU_SCENE_IDS,
 } from '../shared/contracts.js';
 import { AssetStore } from './assetStore.js';
 import { AssetPlanStore } from './assetPlanStore.js';
 import { ApprovalBroker } from './approvalBroker.js';
 import { CodexAppServer } from './codexAppServer.js';
+import { CreationDraftService } from './creationDraftService.js';
+import { CreationBriefPlanner } from './creationBriefPlanner.js';
+import { SpeechSettingsStore } from './speechSettingsStore.js';
+import { SpeechTranscriptionService } from './speechTranscriptionService.js';
+import { importLocalSpeechConfig } from './localSpeechConfig.js';
+import { validateSpeechRequestId, type SaveSpeechSettingsInput, type TranscribeSpeechInput } from '../shared/speech.js';
+import { validateCreationPlanInput, type CreationPlanInput } from '../shared/creationBrief.js';
 import { EventLog } from './eventLog.js';
 import { notificationToEvent, routeThreadId, type ThreadRoute } from './eventMapper.js';
 import {
@@ -93,6 +104,7 @@ import {
   listMediaProviderPresets,
   MediaProviderStore,
   type MediaProviderSummary,
+  type MediaProviderSecretCodec,
 } from './mediaProviderStore.js';
 import { MEDIA_DYNAMIC_TOOLS, MediaToolBroker } from './mediaToolBroker.js';
 import { PreviewServer } from './previewServer.js';
@@ -120,10 +132,16 @@ import {
 } from './workspaceTemplate.js';
 
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
-const smokeCapture = process.env.NOOBI_SMOKE_CAPTURE?.trim() || null;
-if (smokeCapture) app.setPath('userData', resolve('.noobi-smoke/user-data'));
-
-app.setName('Noobi.ai');
+const smokeCapture = process.env.GU_SMOKE_CAPTURE?.trim() || null;
+app.setName('GU.AI');
+if (smokeCapture) {
+  app.setPath('userData', resolve('.gu-smoke/user-data'));
+} else {
+  const profile = join(app.getPath('appData'), 'GU.AI');
+  const legacyProfile = join(app.getPath('appData'), 'Noobi.ai');
+  // An existing installation keeps its login, encrypted settings and Electron instance lock.
+  app.setPath('userData', !existsSync(profile) && existsSync(legacyProfile) ? legacyProfile : profile);
+}
 
 const runtime = new CodexAppServer({
   codexHome: join(app.getPath('userData'), 'codex-home'),
@@ -147,6 +165,14 @@ const projectRunReservations = new Set<string>();
 const projectDeletionReservations = new Set<string>();
 const projectFilesystemAccessCounts = new Map<string, number>();
 let projectStore: ProjectStore;
+let creationDraftService: CreationDraftService;
+let creationBriefPlanner: CreationBriefPlanner;
+const activeBriefRequests = new Map<string, number>();
+let speechSettingsStore: SpeechSettingsStore;
+let speechTranscriptionService: SpeechTranscriptionService;
+const activeSpeechRequests = new Map<string, number>();
+let microphoneAccessUntil = 0;
+let microphonePermissionGeneration = 0;
 let assetPlanStore: AssetPlanStore;
 let eventLog: EventLog;
 let godotEnvironmentService: GodotEnvironmentService;
@@ -166,8 +192,8 @@ if (!hasSingleInstanceLock) {
   app.exit(0);
 } else {
   void app.whenReady().then(launch).catch((error) => {
-    if (smokeCapture) process.stderr.write(`Noobi UI smoke failed: ${asError(error).message}\n`);
-    else dialog.showErrorBox('Noobi.ai 无法启动', asError(error).message);
+    if (smokeCapture) process.stderr.write(`GU UI smoke failed: ${asError(error).message}\n`);
+    else dialog.showErrorBox('GU.AI 无法启动', asError(error).message);
     app.exit(1);
   });
   app.on('second-instance', () => {
@@ -195,17 +221,20 @@ app.on('before-quit', (event) => {
 
 async function launch(): Promise<void> {
   if (!app.isPackaged && process.platform === 'darwin') {
-    app.dock?.setIcon(join(app.getAppPath(), 'build', 'icon.png'));
+    const dockIcon = nativeImage.createFromPath(join(app.getAppPath(), 'build', 'icon.png'));
+    if (!dockIcon.isEmpty()) app.dock?.setIcon(dockIcon);
   }
 
   const userData = app.getPath('userData');
   const defaultWorkspace = smokeCapture
     ? join(userData, 'smoke-projects')
-    : join(homedir(), 'Noobi Games');
+    : join(homedir(), 'GU Games');
   projectStore = new ProjectStore({
     storageFile: join(userData, 'projects.json'),
     defaultWorkspace,
   });
+  creationDraftService = new CreationDraftService(projectStore);
+  creationBriefPlanner = new CreationBriefPlanner(runtime, { workspaceRoot: join(userData, 'brief-planner') });
   eventLog = new EventLog(join(userData, 'events'));
   assetPlanStore = new AssetPlanStore(join(userData, 'asset-plans.json'));
   godotEnvironmentService = new GodotEnvironmentService({
@@ -214,7 +243,7 @@ async function launch(): Promise<void> {
   imageGenerationAttestations = new ImageGenerationAttestationStore(
     join(userData, 'image-generation-attestations.json'),
   );
-  mediaProviderStore = new MediaProviderStore(join(userData, 'media-providers.json'), {
+  const secretCodec: MediaProviderSecretCodec = {
     isAvailable: () => safeStorage.isEncryptionAvailable(),
     seal: (plaintext) => `electron-safe-storage:v1:${safeStorage.encryptString(plaintext).toString('base64')}`,
     open: (sealed) => {
@@ -230,7 +259,10 @@ async function launch(): Promise<void> {
       }
       return safeStorage.decryptString(encrypted);
     },
-  });
+  };
+  mediaProviderStore = new MediaProviderStore(join(userData, 'media-providers.json'), secretCodec);
+  speechSettingsStore = new SpeechSettingsStore(join(userData, 'speech-settings.json'), secretCodec);
+  speechTranscriptionService = new SpeechTranscriptionService({ settingsStore: speechSettingsStore });
   mediaGenerationService = new MediaGenerationService({
     providerStore: mediaProviderStore,
     assetStore,
@@ -250,10 +282,10 @@ async function launch(): Promise<void> {
       return { id: project.id, root: project.root };
     },
     onAssetsChanged: (projectId, assets) => {
-      broadcast('noobi:event:assets', { projectId, assets });
+      broadcast('gu:event:assets', { projectId, assets });
     },
     onAssetPlansChanged: (projectId, assetPlans) => {
-      broadcast('noobi:event:asset-plans', { projectId, assetPlans });
+      broadcast('gu:event:asset-plans', { projectId, assetPlans });
     },
     onGeneratedAsset: async (projectId, asset, provider) => {
       const isImage = asset.kind === 'image';
@@ -285,8 +317,17 @@ async function launch(): Promise<void> {
     godotEnvironmentService.init(),
     imageGenerationAttestations.init(),
     mediaProviderStore.init(),
+    speechSettingsStore.init(),
     promptTemplateStore.init(),
   ]);
+  let localSpeechImportFailed = false;
+  if (!app.isPackaged) {
+    try {
+      await importLocalSpeechConfig(join(app.getAppPath(), '.env.local'), speechSettingsStore);
+    } catch {
+      localSpeechImportFailed = true;
+    }
+  }
   await recoverInterruptedProjects();
   void backfillProjectIcons();
 
@@ -295,6 +336,13 @@ async function launch(): Promise<void> {
   bindIpc();
   await ensureSmokeProject();
   await createWindow();
+  if (localSpeechImportFailed && mainWindow) {
+    void dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      message: '本地语音配置未导入',
+      detail: '请检查项目 .env.local 中的接口地址、模型和 API Key，以及系统密钥加密是否可用。你也可以在「设置 → 语音识别」中配置。',
+    });
+  }
 }
 
 async function createWindow(): Promise<void> {
@@ -303,8 +351,8 @@ async function createWindow(): Promise<void> {
     height: 940,
     minWidth: 760,
     minHeight: 620,
-    backgroundColor: '#11120f',
-    title: 'Noobi.ai',
+    backgroundColor: '#100d24',
+    title: 'GU.AI',
     show: false,
     webPreferences: {
       preload: join(moduleDirectory, 'preload.cjs'),
@@ -315,6 +363,7 @@ async function createWindow(): Promise<void> {
     },
   });
   mainWindow = window;
+  installMicrophonePermissions(window);
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//iu.test(url)) void shell.openExternal(url);
@@ -327,21 +376,83 @@ async function createWindow(): Promise<void> {
   window.once('closed', () => {
     if (mainWindow === window) mainWindow = null;
   });
+  window.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) cancelWindowRequests();
+  });
+  window.webContents.once('destroyed', cancelWindowRequests);
 
-  const rendererUrl = process.env.NOOBI_RENDERER_URL;
+  const rendererUrl = process.env.GU_RENDERER_URL;
   if (rendererUrl) await window.loadURL(rendererUrl);
   else await window.loadFile(join(moduleDirectory, '../renderer/index.html'));
 
   if (smokeCapture) await captureSmoke(window, smokeCapture);
 }
 
+function cancelActiveBriefRequests(): void {
+  for (const requestId of activeBriefRequests.keys()) {
+    void creationBriefPlanner.cancel(requestId).catch(() => undefined);
+  }
+}
+
+function cancelWindowRequests(): void {
+  cancelActiveBriefRequests();
+  microphoneAccessUntil = 0;
+  microphonePermissionGeneration += 1;
+  for (const requestId of activeSpeechRequests.keys()) {
+    void speechTranscriptionService.cancel(requestId).catch(() => undefined);
+  }
+}
+
+function installMicrophonePermissions(window: BrowserWindow): void {
+  const contents = window.webContents;
+  const allowedFrame = (requestingUrl: string | undefined, isMainFrame: boolean): boolean => {
+    if (mainWindow !== window || window.isDestroyed() || contents.isDestroyed()
+      || !isMainFrame || Date.now() >= microphoneAccessUntil || !requestingUrl) return false;
+    return requestingUrl.split('#')[0] === contents.getURL().split('#')[0];
+  };
+  contents.session.setPermissionCheckHandler((sender, permission, _origin, details) => {
+    if (permission === 'media') {
+      return sender === contents && details.mediaType === 'audio'
+        && allowedFrame(details.requestingUrl, details.isMainFrame);
+    }
+    // Preserve existing non-media permissions; screen capture is not part of voice input.
+    return String(permission) !== 'display-capture';
+  });
+  contents.session.setPermissionRequestHandler((sender, permission, callback, details) => {
+    if (permission === 'media') {
+      const mediaTypes = (details as Electron.MediaAccessPermissionRequest).mediaTypes;
+      callback(sender === contents && allowedFrame(details.requestingUrl, details.isMainFrame)
+        && Boolean(mediaTypes?.length) && mediaTypes!.every((type) => type === 'audio'));
+      return;
+    }
+    callback(permission !== 'display-capture');
+  });
+}
+
+async function requestMicrophoneAccess(): Promise<boolean> {
+  const window = mainWindow;
+  const generation = microphonePermissionGeneration;
+  if (!window || window.isDestroyed()) return false;
+  let allowed = true;
+  if (process.platform === 'darwin') {
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    allowed = status === 'granted'
+      || (status === 'not-determined' && await systemPreferences.askForMediaAccess('microphone'));
+  }
+  if (!allowed || shuttingDown || mainWindow !== window || window.isDestroyed()
+    || generation !== microphonePermissionGeneration) return false;
+  // getUserMedia must follow an explicit recording click, not an iframe or a later page.
+  microphoneAccessUntil = Date.now() + 30_000;
+  return true;
+}
+
 function bindRuntimeEvents(): void {
   runtime.on('status', (status) => {
     if (status.state !== 'ready') approvalBroker.invalidateAll();
-    broadcast('noobi:event:runtime', runtimeStatusForUi(status));
+    broadcast('gu:event:runtime', runtimeStatusForUi(status));
   });
   runtime.on('diagnostic', (message: string) => {
-    if (process.env.NOOBI_DEBUG === '1') process.stderr.write(`[codex] ${message}\n`);
+    if (process.env.GU_DEBUG === '1') process.stderr.write(`[codex] ${message}\n`);
   });
   runtime.on('serverRequest', (request) => {
     if (!mediaToolBroker.handle(request)) approvalBroker.handle(request);
@@ -357,7 +468,7 @@ function bindRuntimeEvents(): void {
     if (!route) return;
     if (route.role === 'implementer' && notification.method === 'item/completed') {
       const task = ingestGeneratedImage(notification, route.projectId).catch((error) => {
-        if (process.env.NOOBI_DEBUG === '1') {
+        if (process.env.GU_DEBUG === '1') {
           process.stderr.write(`[assets] ${asError(error).message}\n`);
         }
       });
@@ -372,10 +483,10 @@ function bindRuntimeEvents(): void {
     }
   });
 
-  approvalBroker.on('approval', (approval) => broadcast('noobi:event:approval', approval));
-  approvalBroker.on('closed', (token: string) => broadcast('noobi:event:approval-closed', token));
+  approvalBroker.on('approval', (approval) => broadcast('gu:event:approval', approval));
+  approvalBroker.on('closed', (token: string) => broadcast('gu:event:approval-closed', token));
   approvalBroker.on('diagnostic', (message: string) => {
-    if (process.env.NOOBI_DEBUG === '1') process.stderr.write(`[approval] ${message}\n`);
+    if (process.env.GU_DEBUG === '1') process.stderr.write(`[approval] ${message}\n`);
   });
   approvalBroker.on('expired', (approval) => {
     if (!approval.projectId) return;
@@ -433,7 +544,7 @@ function bindHarnessEvents(): void {
 }
 
 function bindIpc(): void {
-  handle('noobi:bootstrap', async (): Promise<BootstrapPayload> => {
+  handle('gu:bootstrap', async (): Promise<BootstrapPayload> => {
     const projects = await projectStore.list();
     const settings = await projectStore.getSettings();
     await runtime.start().catch(() => runtime.status);
@@ -443,16 +554,16 @@ function bindIpc(): void {
     return { projects, settings, runtime: runtimeStatusForUi(runtime.status), events };
   });
 
-  handle('noobi:runtime:refresh', async () => runtimeStatusForUi(await runtime.refresh()));
-  handle('noobi:runtime:login', async () => {
+  handle('gu:runtime:refresh', async () => runtimeStatusForUi(await runtime.refresh()));
+  handle('gu:runtime:login', async () => {
     const result = await runtime.startLogin();
     if (result.authUrl && /^https:\/\//iu.test(result.authUrl)) {
       await shell.openExternal(result.authUrl);
     }
     return result;
   });
-  handle('noobi:runtime:logout', async () => runtimeStatusForUi(await runtime.logout()));
-  handle('noobi:dialog:directory', async () => {
+  handle('gu:runtime:logout', async () => runtimeStatusForUi(await runtime.logout()));
+  handle('gu:dialog:directory', async () => {
     const settings = await projectStore.getSettings();
     const options: Electron.OpenDialogOptions = {
       title: '选择默认项目存放位置',
@@ -464,7 +575,7 @@ function bindIpc(): void {
       : await dialog.showOpenDialog(options);
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
-  handle('noobi:dialog:project-directory', async () => {
+  handle('gu:dialog:project-directory', async () => {
     const settings = await projectStore.getSettings();
     while (true) {
       const options: Electron.OpenDialogOptions = {
@@ -501,7 +612,68 @@ function bindIpc(): void {
     }
   });
 
-  handle('noobi:project:create', async (
+  handle('gu:brief:plan', async (_event, value: CreationPlanInput) => {
+    const input = validateCreationPlanInput(value);
+    if (runtime.status.state !== 'ready' || !runtime.status.account) {
+      throw new Error('请先连接 Codex 并登录，再整理 AI 方案。');
+    }
+    if (activeBriefRequests.size && !activeBriefRequests.has(input.requestId)) {
+      throw new Error('已有方案正在整理，请先等待或取消。');
+    }
+    activeBriefRequests.set(input.requestId, (activeBriefRequests.get(input.requestId) ?? 0) + 1);
+    try {
+      const settings = await projectStore.getSettings();
+      return await creationBriefPlanner.plan(input, {
+        model: settings.defaultModel,
+        effort: 'low',
+      });
+    } finally {
+      const remaining = (activeBriefRequests.get(input.requestId) ?? 1) - 1;
+      if (remaining > 0) activeBriefRequests.set(input.requestId, remaining);
+      else activeBriefRequests.delete(input.requestId);
+    }
+  });
+  handle('gu:brief:cancel', async (_event, requestId: string) => {
+    await creationBriefPlanner.cancel(requestId);
+  });
+
+  handle('gu:speech:settings', () => speechSettingsStore.get());
+  handle('gu:speech:settings:save', (_event, input: SaveSpeechSettingsInput) => speechSettingsStore.save(input));
+  handle('gu:speech:microphone', requestMicrophoneAccess);
+  handle('gu:speech:transcribe', async (_event, input: TranscribeSpeechInput) => {
+    const requestId = validateSpeechRequestId(input?.requestId);
+    if (activeSpeechRequests.size && !activeSpeechRequests.has(requestId)) {
+      throw new Error('已有语音正在转录，请先等待或取消');
+    }
+    activeSpeechRequests.set(requestId, (activeSpeechRequests.get(requestId) ?? 0) + 1);
+    try {
+      return await speechTranscriptionService.transcribe(input);
+    } finally {
+      const remaining = (activeSpeechRequests.get(requestId) ?? 1) - 1;
+      if (remaining > 0) activeSpeechRequests.set(requestId, remaining);
+      else activeSpeechRequests.delete(requestId);
+    }
+  });
+  handle('gu:speech:cancel', (_event, requestId: string) => speechTranscriptionService.cancel(requestId));
+
+  handle('gu:project:create-draft', async (_event, input: CreateDraftProjectInput) => {
+    const draft = await creationDraftService.create(input);
+    const project = draft.icon ? draft : await withProceduralIcon(draft);
+    emitAgentEvent({
+      id: `creation-brief-${project.id}`,
+      projectId: project.id,
+      kind: 'user',
+      title: '创作草案已确认',
+      message: project.idea,
+      stage: 'brief',
+      timestamp: project.createdAt,
+      method: 'project/draft-created',
+    });
+    broadcast('gu:event:project', project);
+    return project;
+  });
+
+  handle('gu:project:create', async (
     _event,
     input: CreateProjectInput,
     attachmentPaths: unknown = [],
@@ -576,7 +748,7 @@ function bindIpc(): void {
           stage: 'assets',
           lastError: message,
         });
-        broadcast('noobi:event:project', failed);
+        broadcast('gu:event:project', failed);
         return failed;
       }
     }
@@ -592,23 +764,23 @@ function bindIpc(): void {
         return failed;
       }
     }
-    broadcast('noobi:event:project', project);
+    broadcast('gu:event:project', project);
     return project;
   });
 
-  handle('noobi:project:rename', (_event, projectId: string, name: unknown) => {
+  handle('gu:project:rename', (_event, projectId: string, name: unknown) => {
     const id = validateProjectId(projectId);
     if (typeof name !== 'string') throw new Error('游戏名称必须是文字');
     if (projectDeletionReservations.has(id)) throw new Error('项目正在删除');
     return updateProject(id, { name });
   });
-  handle('noobi:project:pin', async (_event, projectId: string, pinned: boolean) => {
+  handle('gu:project:pin', async (_event, projectId: string, pinned: boolean) => {
     if (typeof pinned !== 'boolean') throw new Error('无效的置顶状态');
     const id = validateProjectId(projectId);
     if (projectDeletionReservations.has(id)) throw new Error('项目正在删除');
     return updateProject(id, { pinned });
   });
-  handle('noobi:project:delete', async (_event, projectId: string) => {
+  handle('gu:project:delete', async (_event, projectId: string) => {
     const id = validateProjectId(projectId);
     if (projectDeletionReservations.has(id)) throw new Error('项目正在删除');
     projectDeletionReservations.add(id);
@@ -627,7 +799,7 @@ function bindIpc(): void {
         assetPlanStore.removeProject(project.id),
         imageGenerationAttestations.removeProject(project.id),
       ]);
-      if (process.env.NOOBI_DEBUG === '1') {
+      if (process.env.GU_DEBUG === '1') {
         cleanup.forEach((result) => {
           if (result.status === 'rejected') {
             process.stderr.write(`[project-delete] sidecar cleanup failed: ${asError(result.reason).message}\n`);
@@ -645,7 +817,37 @@ function bindIpc(): void {
     }
   });
 
-  handle('noobi:project:run', async (_event, input: RunProjectInput) => {
+  handle('gu:project:readiness', async (_event, projectId: string, requestedModel: string | null) => {
+    if (typeof projectId !== 'string' || !projectId || projectId.length > 128) throw new Error('项目标识无效');
+    if (requestedModel !== null && (typeof requestedModel !== 'string' || requestedModel.length > 256)) throw new Error('模型标识无效');
+    const project = await projectStore.get(projectId);
+    const issues: ProjectReadiness['issues'] = [];
+    if (isProjectBusyForMutation(projectId)) issues.push({ message: '项目正在处理，请等待当前任务结束。', action: 'wait' });
+    try { await resolveExistingProjectDirectory(project.root, project.id); }
+    catch { issues.push({ message: '项目文件夹无法读取，请重新连接原文件夹。', action: 'locate' }); }
+    const status = await runtime.start().catch(() => runtime.status);
+    if (status.state !== 'ready' || !status.account) {
+      issues.push({ message: '请先连接 Codex 并登录账户。', action: 'account' });
+    } else {
+      const settings = await projectStore.getSettings();
+      const model = requestedModel ?? project.model ?? settings.defaultModel ?? defaultModel(status.models);
+      if (!model || !status.models.some((item) => item.model === model)) {
+        issues.push({ message: '当前模型不可用，请在制作模型中选择一个可用模型。', action: 'wait' });
+      }
+      if (!activeMediaProvider('image') && !await resolveImageGenerationSkill()) {
+        issues.push({ message: '图片生成尚未就绪，请配置图片服务或启用 Codex ImageGen。', action: 'media' });
+      }
+    }
+    if (project.engine === 'godot') {
+      const godot = await godotEnvironmentService.refresh();
+      if (!godot.canCreateProjects || !godot.canExportProjects || !godot.exportTemplates.targets.web) {
+        issues.push({ message: '请配置 Godot 4 和匹配的 Web 导出模板。', action: 'environment' });
+      }
+    }
+    return { ready: issues.length === 0, issues } satisfies ProjectReadiness;
+  });
+
+  handle('gu:project:run', async (_event, input: RunProjectInput) => {
     validateRunInput(input);
     let project = await projectStore.get(input.projectId);
     if (isProjectBusyForMutation(project.id)) {
@@ -671,6 +873,9 @@ function bindIpc(): void {
       if (!status.account) throw new Error('请先登录 ChatGPT，再启动游戏 Agent');
       const settings = await projectStore.getSettings();
       const model = input.model ?? project.model ?? settings.defaultModel ?? defaultModel(status.models);
+      if (!model || !status.models.some((item) => item.model === model)) {
+        throw new Error('当前模型不可用，请选择账户中的可用模型后重试。');
+      }
       const targetFrameRate = project.targetFrameRate;
       const imageProvider = activeMediaProvider('image');
       const audioProvider = activeMediaProvider('audio');
@@ -744,7 +949,7 @@ function bindIpc(): void {
     }
   });
 
-  handle('noobi:project:stop', async (_event, projectId: string) => {
+  handle('gu:project:stop', async (_event, projectId: string) => {
     validateProjectId(projectId);
     await harness.stop(projectId);
     const project = await projectStore.get(projectId);
@@ -752,7 +957,7 @@ function bindIpc(): void {
       ? updateProject(projectId, { status: 'stopped', activeTurnId: null })
       : project;
   });
-  handle('noobi:project:reveal', async (_event, projectId: string) => {
+  handle('gu:project:reveal', async (_event, projectId: string) => {
     const id = validateProjectId(projectId);
     const release = acquireProjectFilesystemAccess(id);
     try {
@@ -766,7 +971,7 @@ function bindIpc(): void {
       release();
     }
   });
-  handle('noobi:project:assets:import', async (_event, projectId: string) => {
+  handle('gu:project:assets:import', async (_event, projectId: string) => {
     const id = validateProjectId(projectId);
     const release = acquireProjectFilesystemAccess(id);
     try {
@@ -796,7 +1001,7 @@ function bindIpc(): void {
       release();
     }
   });
-  handle('noobi:project:assets:import-paths', async (_event, projectId: string, paths: unknown) => {
+  handle('gu:project:assets:import-paths', async (_event, projectId: string, paths: unknown) => {
     const id = validateProjectId(projectId);
     const release = acquireProjectFilesystemAccess(id);
     try {
@@ -821,14 +1026,14 @@ function bindIpc(): void {
       release();
     }
   });
-  handle('noobi:project:asset-plan:retry', async (_event, projectId: string, planId: string) => {
+  handle('gu:project:asset-plan:retry', async (_event, projectId: string, planId: string) => {
     const project = await projectStore.get(validateProjectId(projectId));
     if (isProjectBusyForMutation(project.id)) {
       throw new Error('Agent 正在写入项目，请等待当前任务结束后再重新生成素材');
     }
     const queued = await assetPlanStore.queue(project.id, validateAssetPlanId(planId));
     const assetPlans = await assetPlanStore.list(project.id);
-    broadcast('noobi:event:asset-plans', { projectId: project.id, assetPlans });
+    broadcast('gu:event:asset-plans', { projectId: project.id, assetPlans });
     emitAgentEvent({
       id: randomUUID(),
       projectId: project.id,
@@ -841,7 +1046,7 @@ function bindIpc(): void {
     });
     return queued;
   });
-  handle('noobi:project:inspect', async (_event, projectId: string): Promise<ProjectInspectorPayload> => {
+  handle('gu:project:inspect', async (_event, projectId: string): Promise<ProjectInspectorPayload> => {
     const id = validateProjectId(projectId);
     const release = acquireProjectFilesystemAccess(id);
     try {
@@ -877,7 +1082,7 @@ function bindIpc(): void {
       release();
     }
   });
-  handle('noobi:project:experience:evaluate', async (_event, projectId: string) => {
+  handle('gu:project:experience:evaluate', async (_event, projectId: string) => {
     const project = await projectStore.get(validateProjectId(projectId));
     if (isProjectBusyForMutation(project.id)) {
       throw new Error('Agent 正在写入或启动项目，请等待当前任务结束后再进行体验评测');
@@ -898,11 +1103,11 @@ function bindIpc(): void {
       }
     }
   });
-  handle('noobi:project:experience:cancel', (_event, projectId: string) => {
+  handle('gu:project:experience:cancel', (_event, projectId: string) => {
     const id = validateProjectId(projectId);
     manualExperienceControllers.get(id)?.abort();
   });
-  handle('noobi:project:read', async (_event, projectId: string, relativePath: string) => {
+  handle('gu:project:read', async (_event, projectId: string, relativePath: string) => {
     const id = validateProjectId(projectId);
     if (typeof relativePath !== 'string' || relativePath.length > 4_000) {
       throw new Error('无效的项目文件路径');
@@ -914,7 +1119,7 @@ function bindIpc(): void {
       release();
     }
   });
-  handle('noobi:project:icon', async (_event, projectId: string): Promise<ProjectIconData | null> => {
+  handle('gu:project:icon', async (_event, projectId: string): Promise<ProjectIconData | null> => {
     const id = validateProjectId(projectId);
     const release = acquireProjectFilesystemAccess(id);
     try {
@@ -930,42 +1135,42 @@ function bindIpc(): void {
       release();
     }
   });
-  handle('noobi:project:noobi-pack:save', (
+  handle('gu:project:gu-pack:save', (
     _event,
     projectId: string,
     packId: unknown,
   ) => {
     const id = validateProjectId(projectId);
-    if (packId !== null && !isNoobiPackId(packId)) {
-      throw new Error('无效的 Noobi 主题包');
+    if (packId !== null && !isGuPackId(packId)) {
+      throw new Error('无效的 GU 主题包');
     }
-    return updateProject(id, { noobiPackOverrideId: packId });
+    return updateProject(id, { guPackOverrideId: packId });
   });
-  handle('noobi:project:noobi-crew:save', (
+  handle('gu:project:gu-crew:save', (
     _event,
     projectId: string,
     crew: unknown,
   ) => {
     const id = validateProjectId(projectId);
-    if (crew !== null && !isNoobiCrew(crew)) throw new Error('无效的 Noobi 协作编队');
+    if (crew !== null && !isGuCrew(crew)) throw new Error('无效的 GU 协作编队');
     return updateProject(id, {
-      noobiCrewOverride: crew === null
+      guCrewOverride: crew === null
         ? null
-        : crew.map(({ packId, role }: NoobiCrewMember) => ({ packId, role })),
+        : crew.map(({ packId, role }: GuCrewMember) => ({ packId, role })),
     });
   });
-  handle('noobi:settings:save', (_event, patch: Partial<AppSettings>) =>
+  handle('gu:settings:save', (_event, patch: Partial<AppSettings>) =>
     projectStore.saveSettings(validateSettingsPatch(patch)),
   );
-  handle('noobi:environment:get', () => environmentStatusSnapshot());
-  handle('noobi:environment:refresh', async () => {
+  handle('gu:environment:get', () => environmentStatusSnapshot());
+  handle('gu:environment:refresh', async () => {
     await Promise.all([
       godotEnvironmentService.refresh(),
       runtime.refresh().catch(() => runtime.status),
     ]);
     return environmentStatusSnapshot();
   });
-  handle('noobi:environment:godot:choose', async () => {
+  handle('gu:environment:godot:choose', async () => {
     const status = await godotEnvironmentService.getStatus();
     const options: Electron.OpenDialogOptions = {
       title: '选择 Godot 4 可执行文件或 Godot.app',
@@ -982,14 +1187,14 @@ function bindIpc(): void {
       : await dialog.showOpenDialog(options);
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
-  handle('noobi:environment:godot:save', async (_event, binaryPath: string | null) => {
+  handle('gu:environment:godot:save', async (_event, binaryPath: string | null) => {
     if (binaryPath !== null && typeof binaryPath !== 'string') {
       throw new Error('Godot 可执行文件路径无效');
     }
     await godotEnvironmentService.saveBinaryPath(binaryPath);
     return environmentStatusSnapshot();
   });
-  handle('noobi:extensions:get', async (): Promise<ExtensionSettingsSnapshot> => {
+  handle('gu:extensions:get', async (): Promise<ExtensionSettingsSnapshot> => {
     const [skills, mcpServers, promptTemplates] = await Promise.all([
       listSkillSettings(),
       listMcpSettings(),
@@ -1002,7 +1207,7 @@ function bindIpc(): void {
       promptTemplates,
     };
   });
-  handle('noobi:media-provider:save', async (_event, input: SaveMediaProviderInput) => {
+  handle('gu:media-provider:save', async (_event, input: SaveMediaProviderInput) => {
     const normalized = validateMediaProviderInput(input);
     // Reuse secrets only for the exact same preset. Carrying an omitted key
     // from one vendor to another could disclose it to the wrong endpoint.
@@ -1021,10 +1226,10 @@ function bindIpc(): void {
       setActive: normalized.enabled,
     });
     mediaProviderTests.delete(normalized.capability);
-    broadcast('noobi:event:runtime', runtimeStatusForUi(runtime.status));
+    broadcast('gu:event:runtime', runtimeStatusForUi(runtime.status));
     return mediaProviderSetting(saved);
   });
-  handle('noobi:media-provider:test', async (_event, capability: MediaCapability) => {
+  handle('gu:media-provider:test', async (_event, capability: MediaCapability) => {
     const kind = validateMediaCapability(capability);
     const started = Date.now();
     const provider = activeMediaProvider(kind);
@@ -1058,8 +1263,8 @@ function bindIpc(): void {
     mediaProviderTests.set(kind, result);
     return result;
   });
-  handle('noobi:skills:list', () => listSkillSettings());
-  handle('noobi:skills:set-enabled', async (_event, input: { id: string; enabled: boolean }) => {
+  handle('gu:skills:list', () => listSkillSettings());
+  handle('gu:skills:set-enabled', async (_event, input: { id: string; enabled: boolean }) => {
     if (!input || typeof input !== 'object' || typeof input.id !== 'string' || typeof input.enabled !== 'boolean') {
       throw new Error('无效的 Skill 设置');
     }
@@ -1077,25 +1282,25 @@ function bindIpc(): void {
     if (!result) throw new Error('Skill 状态刷新失败');
     return result;
   });
-  handle('noobi:mcp:list', () => listMcpSettings());
-  handle('noobi:mcp:save', async (_event, input: SaveMcpServerInput) => {
+  handle('gu:mcp:list', () => listMcpSettings());
+  handle('gu:mcp:save', async (_event, input: SaveMcpServerInput) => {
     await mcpConfigManager.save(input);
     const result = (await listMcpSettings()).find((server) => server.id === input.id);
     if (!result) throw new Error('MCP Server 保存后未出现在 Codex 配置中');
     return result;
   });
-  handle('noobi:mcp:remove', async (_event, id: string) => {
+  handle('gu:mcp:remove', async (_event, id: string) => {
     await mcpConfigManager.remove(id);
   });
-  handle('noobi:prompts:list', () => listPromptSettings());
-  handle('noobi:prompts:save', async (_event, input: {
+  handle('gu:prompts:list', () => listPromptSettings());
+  handle('gu:prompts:save', async (_event, input: {
     id: PromptTemplateId;
     content: string;
     enabled: boolean;
   }) => promptTemplateStore.save(input));
-  handle('noobi:prompts:reset', (_event, id: PromptTemplateId) => promptTemplateStore.reset(id));
+  handle('gu:prompts:reset', (_event, id: PromptTemplateId) => promptTemplateStore.reset(id));
   handle(
-    'noobi:approval:resolve',
+    'gu:approval:resolve',
     (_event, token: string, decision: ApprovalDecision, answers?: ApprovalAnswers): void => {
       if (typeof token !== 'string' || token.length > 200) throw new Error('无效的审批令牌');
       if (!['accept', 'acceptForSession', 'decline', 'cancel'].includes(decision)) {
@@ -1113,7 +1318,7 @@ async function importProjectAssetPaths(
 ): Promise<GameAssetRecord[]> {
   await assetStore.importFiles(project.id, project.root, [...paths]);
   const assets = await assetStore.list(project.id, project.root);
-  broadcast('noobi:event:assets', { projectId: project.id, assets });
+  broadcast('gu:event:assets', { projectId: project.id, assets });
   emitAgentEvent({
     id: randomUUID(),
     projectId: project.id,
@@ -1373,7 +1578,7 @@ async function environmentStatusSnapshot(): Promise<EnvironmentStatusSnapshot> {
 }
 
 function codexEnvironmentTool(status: RuntimeStatus): EnvironmentToolStatus {
-  const configuredPath = process.env.NOOBI_CODEX_BIN?.trim() || null;
+  const configuredPath = process.env.GU_CODEX_BIN?.trim() || null;
   const state: EnvironmentToolStatus['state'] = status.state === 'error'
     ? 'error'
     : !status.binaryPath
@@ -1672,7 +1877,7 @@ async function validateProjectDelivery(
 
   try {
     const assetPlans = await assetPlanStore.reconcile(project.id, project.root, assets);
-    broadcast('noobi:event:asset-plans', { projectId: project.id, assetPlans });
+    broadcast('gu:event:asset-plans', { projectId: project.id, assetPlans });
     const unresolvedRequired = assetPlans.filter((plan) => plan.required && plan.status !== 'ready');
     if (unresolvedRequired.length > 0) {
       findings.push(
@@ -1750,7 +1955,7 @@ async function validateProjectDelivery(
             ? '当前音频文件的路径或 SHA-256 与宿主 MiniMax 生成证明不匹配'
             : '受信 MiniMax 音乐的完整资源路径没有出现在生产源码或构建产物中';
         findings.push(
-          `MINIMAX_MUSIC: ${detail}。调用 noobi_audio_generate（purpose=music），保留宿主入库音频，并由游戏生产代码真实加载播放。`,
+          `MINIMAX_MUSIC: ${detail}。调用 gu_audio_generate（purpose=music），保留宿主入库音频，并由游戏生产代码真实加载播放。`,
         );
       }
     } catch (error) {
@@ -1772,7 +1977,7 @@ async function validateProjectDelivery(
         .join('；');
       findings.push(
         `PLAYTEST_EXPERIENCE: 自动试玩评分 ${Math.round(experienceReport.score)}/100。${failed || experienceReport.summary || '存在未通过的体验步骤。'} `
-          + '检查 artifacts/playtest/latest/report.json 及其截图，修复真实控制、反馈、动画、暂停/恢复、重开或运行错误，并保持 .noobi/playtest.json 与正式构建一致。',
+          + '检查 artifacts/playtest/latest/report.json 及其截图，修复真实控制、反馈、动画、暂停/恢复、重开或运行错误，并保持 .gu/playtest.json 与正式构建一致。',
       );
     }
   } else {
@@ -2007,10 +2212,10 @@ async function ingestGeneratedImage(
   if (matchingPlan) {
     await assetPlanStore.generated(projectId, matchingPlan.id, asset, 'codex-imagegen');
     const assetPlans = await assetPlanStore.list(projectId);
-    broadcast('noobi:event:asset-plans', { projectId, assetPlans });
+    broadcast('gu:event:asset-plans', { projectId, assetPlans });
   }
   const assets = await assetStore.list(projectId, project.root);
-  broadcast('noobi:event:assets', { projectId, assets });
+  broadcast('gu:event:assets', { projectId, assets });
   emitAgentEvent({
     id: randomUUID(),
     projectId,
@@ -2028,7 +2233,7 @@ async function updateProject(
   patch: Parameters<ProjectStore['update']>[1],
 ): Promise<ProjectRecord> {
   const project = await projectStore.update(projectId, patch);
-  broadcast('noobi:event:project', project);
+  broadcast('gu:event:project', project);
   return project;
 }
 
@@ -2055,7 +2260,7 @@ async function ensureProjectLocation(
   while (true) {
     const options: Electron.OpenDialogOptions = {
       title: `重新连接“${project.name}”的项目文件夹`,
-      message: '请选择这个游戏改名或移动后的文件夹，NooBi 会核对项目身份并更新保存路径。',
+      message: '请选择这个游戏改名或移动后的文件夹，GU 会核对项目身份并更新保存路径。',
       buttonLabel: '重新连接',
       defaultPath: dirname(project.root),
       properties: ['openDirectory'],
@@ -2070,7 +2275,7 @@ async function ensureProjectLocation(
     try {
       const relocated = await projectStore.relocate(project.id, selectedDirectory);
       await Promise.allSettled([previews.stop(project.id), playtestPreviews.stop(project.id)]);
-      broadcast('noobi:event:project', relocated);
+      broadcast('gu:event:project', relocated);
       return relocated;
     } catch (error) {
       const messageOptions: Electron.MessageBoxOptions = {
@@ -2105,7 +2310,7 @@ async function backfillProjectIcons(): Promise<void> {
         const icon = await generateProceduralProjectIcon(project);
         await updateProject(project.id, { icon });
       } catch (error) {
-        if (process.env.NOOBI_DEBUG === '1') {
+        if (process.env.GU_DEBUG === '1') {
           process.stderr.write(`[project-icon] backfill failed for ${project.id}: ${asError(error).message}\n`);
         }
       } finally {
@@ -2113,7 +2318,7 @@ async function backfillProjectIcons(): Promise<void> {
       }
     }
   } catch (error) {
-    if (process.env.NOOBI_DEBUG === '1') {
+    if (process.env.GU_DEBUG === '1') {
       process.stderr.write(`[project-icon] backfill failed: ${asError(error).message}\n`);
     }
   }
@@ -2128,7 +2333,7 @@ async function withProceduralIcon(project: ProjectRecord): Promise<ProjectRecord
     const icon = await generateProceduralProjectIcon(project);
     return await projectStore.update(project.id, { icon });
   } catch (error) {
-    if (process.env.NOOBI_DEBUG === '1') {
+    if (process.env.GU_DEBUG === '1') {
       process.stderr.write(`[project-icon] procedural generation failed: ${asError(error).message}\n`);
     }
     return project;
@@ -2173,7 +2378,7 @@ async function maybeGenerateGameIcon(projectId: string): Promise<void> {
       method: 'project/icon-generated',
     });
   } catch (error) {
-    if (process.env.NOOBI_DEBUG === '1') {
+    if (process.env.GU_DEBUG === '1') {
       process.stderr.write(`[project-icon] generation failed: ${asError(error).message}\n`);
     }
   } finally {
@@ -2183,9 +2388,9 @@ async function maybeGenerateGameIcon(projectId: string): Promise<void> {
 
 function emitAgentEvent(event: AgentEvent): void {
   void eventLog.append(event).catch((error) => {
-    if (process.env.NOOBI_DEBUG === '1') process.stderr.write(`[event-log] ${asError(error).message}\n`);
+    if (process.env.GU_DEBUG === '1') process.stderr.write(`[event-log] ${asError(error).message}\n`);
   });
-  broadcast('noobi:event:agent', event);
+  broadcast('gu:event:agent', event);
 }
 
 function handle(
@@ -2194,7 +2399,7 @@ function handle(
 ): void {
   ipcMain.handle(channel, (event, ...args) => {
     assertTrustedRenderer(event);
-    if (shuttingDown) throw new Error('Noobi.ai 正在退出');
+    if (shuttingDown) throw new Error('GU.AI 正在退出');
     return listener(event, ...args);
   });
 }
@@ -2204,7 +2409,7 @@ function assertTrustedRenderer(event: IpcMainInvokeEvent): void {
     throw new Error('Rejected IPC from an untrusted renderer');
   }
   const source = event.senderFrame.url;
-  const expected = process.env.NOOBI_RENDERER_URL;
+  const expected = process.env.GU_RENDERER_URL;
   if (expected ? !source.startsWith(expected) : !source.startsWith('file:')) {
     throw new Error('Rejected IPC from an unexpected origin');
   }
@@ -2226,8 +2431,8 @@ async function ensureSmokeProject(): Promise<void> {
       model: null,
     });
   }
-  const smokeStage = process.env.NOOBI_SMOKE_STAGE?.trim();
-  const smokeStatus = process.env.NOOBI_SMOKE_STATUS?.trim();
+  const smokeStage = process.env.GU_SMOKE_STAGE?.trim();
+  const smokeStatus = process.env.GU_SMOKE_STATUS?.trim();
   const validStages: readonly PipelineStage[] = [
     'brief', 'scaffold', 'gdd', 'assets', 'world', 'code', 'verify', 'complete',
   ];
@@ -2237,40 +2442,40 @@ async function ensureSmokeProject(): Promise<void> {
   const smokePatch: {
     stage?: PipelineStage;
     status?: ProjectStatus;
-    noobiPackOverrideId?: ProjectRecord['noobiPackOverrideId'];
-    noobiCrewOverride?: ProjectRecord['noobiCrewOverride'];
+    guPackOverrideId?: ProjectRecord['guPackOverrideId'];
+    guCrewOverride?: ProjectRecord['guCrewOverride'];
   } = {};
   if (validStages.includes(smokeStage as PipelineStage)) smokePatch.stage = smokeStage as PipelineStage;
   if (validStatuses.includes(smokeStatus as ProjectStatus)) smokePatch.status = smokeStatus as ProjectStatus;
-  const smokePack = process.env.NOOBI_SMOKE_PACK?.trim();
-  if (isNoobiPackId(smokePack)) {
-    smokePatch.noobiPackOverrideId = smokePack;
-    const smokeCrew = DEFAULT_NOOBI_CREW.map((member) => ({ ...member }));
+  const smokePack = process.env.GU_SMOKE_PACK?.trim();
+  if (isGuPackId(smokePack)) {
+    smokePatch.guPackOverrideId = smokePack;
+    const smokeCrew = DEFAULT_GU_CREW.map((member) => ({ ...member }));
     if (!smokeCrew.some((member) => member.packId === smokePack)) {
       smokeCrew[0] = { packId: smokePack, role: 'planner' };
     }
-    smokePatch.noobiCrewOverride = smokeCrew;
+    smokePatch.guCrewOverride = smokeCrew;
   }
   if (Object.keys(smokePatch).length > 0) {
     project = await projectStore.update(project.id, smokePatch);
   }
-  const smokeScene = process.env.NOOBI_SMOKE_SCENE?.trim();
-  if (isNoobiSceneId(smokeScene)) {
+  const smokeScene = process.env.GU_SMOKE_SCENE?.trim();
+  if (isGuSceneId(smokeScene)) {
     await projectStore.saveSettings({
-      defaultNoobiSceneId: smokeScene,
-      defaultNoobiStageMode: 'crew',
+      defaultGuSceneId: smokeScene,
+      defaultGuStageMode: 'crew',
     });
-  } else if (process.env.NOOBI_SMOKE_CREW === '1') {
-    await projectStore.saveSettings({ defaultNoobiStageMode: 'crew' });
-  } else if (process.env.NOOBI_SMOKE_VIEW === 'settings-noobi'
-    || process.env.NOOBI_SMOKE_VIEW === 'workbench') {
+  } else if (process.env.GU_SMOKE_CREW === '1') {
+    await projectStore.saveSettings({ defaultGuStageMode: 'crew' });
+  } else if (process.env.GU_SMOKE_VIEW === 'settings-gu'
+    || process.env.GU_SMOKE_VIEW === 'workbench') {
     await projectStore.saveSettings({
-      defaultNoobiStageMode: 'solo',
-      defaultNoobiSoloSceneId: 'classic',
-      defaultNoobiPackId: 'classic',
+      defaultGuStageMode: 'solo',
+      defaultGuSoloSceneId: 'classic',
+      defaultGuPackId: 'classic',
     });
   }
-  if (process.env.NOOBI_SMOKE_TAB === 'assets') {
+  if (process.env.GU_SMOKE_TAB === 'assets') {
     const plan = await assetPlanStore.upsert({
       id: 'smoke-card-art',
       projectId: project.id,
@@ -2290,7 +2495,7 @@ async function ensureSmokeProject(): Promise<void> {
 }
 
 async function captureSmoke(window: BrowserWindow, target: string): Promise<void> {
-  if (process.env.NOOBI_SMOKE_NARROW === '1') {
+  if (process.env.GU_SMOKE_NARROW === '1') {
     window.setSize(760, 800, false);
   }
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 2_500));
@@ -2298,8 +2503,8 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
     `Boolean(document.querySelector('.app-shell')) && !document.querySelector('.loading-error')`,
     true,
   ) as boolean;
-  if (!healthy) throw new Error('Renderer did not reach the Noobi workbench');
-  const smokeTheme = process.env.NOOBI_SMOKE_THEME;
+  if (!healthy) throw new Error('Renderer did not reach the GU workbench');
+  const smokeTheme = process.env.GU_SMOKE_THEME;
   if (smokeTheme === 'light' || smokeTheme === 'dark') {
     await window.webContents.executeJavaScript(
       `if (document.documentElement.dataset.theme !== ${JSON.stringify(smokeTheme)}) {
@@ -2309,7 +2514,7 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
     );
     await delay(300);
   }
-  if (process.env.NOOBI_SMOKE_COLLAPSED === '1') {
+  if (process.env.GU_SMOKE_COLLAPSED === '1') {
     const collapsed = await window.webContents.executeJavaScript(
       `(() => {
         const trigger = document.querySelector('[aria-label="收起首页侧栏"]');
@@ -2345,20 +2550,20 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       })()`,
       true,
     ) as boolean;
-    if (!roundTrip) throw new Error('Collapsed Noobi monogram was not available');
+    if (!roundTrip) throw new Error('Collapsed GU monogram was not available');
     await delay(200);
     const railExpanded = await window.webContents.executeJavaScript(
       `document.querySelector('.project-rail.mode-dashboard')?.classList.contains('is-collapsed') === false`,
       true,
     ) as boolean;
-    if (!railExpanded) throw new Error('Collapsed Noobi monogram did not expand the home rail');
+    if (!railExpanded) throw new Error('Collapsed GU monogram did not expand the home rail');
     await window.webContents.executeJavaScript(
       `document.querySelector('[aria-label="收起首页侧栏"]')?.click()`,
       true,
     );
     await delay(200);
   }
-  if (process.env.NOOBI_SMOKE_PROMPT_PROGRESS === '1') {
+  if (process.env.GU_SMOKE_PROMPT_PROGRESS === '1') {
     const samples: string[] = [];
     for (let attempt = 0; attempt < 50; attempt += 1) {
       const placeholder = await window.webContents.executeJavaScript(
@@ -2377,10 +2582,10 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       throw new Error(`Rotating prompt did not complete a delete/type cycle: ${JSON.stringify(lengths)}`);
     }
     process.stdout.write(
-      `Noobi rotating prompt passed; samples=${samples.length}; min=${Math.min(...lengths)}; max=${Math.max(...lengths)}\n`,
+      `GU rotating prompt passed; samples=${samples.length}; min=${Math.min(...lengths)}; max=${Math.max(...lengths)}\n`,
     );
   }
-  if (process.env.NOOBI_SMOKE_MODEL_MENU === '1') {
+  if (process.env.GU_SMOKE_MODEL_MENU === '1') {
     let opened = false;
     for (let attempt = 0; attempt < 20 && !opened; attempt += 1) {
       opened = await window.webContents.executeJavaScript(
@@ -2430,9 +2635,9 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
     if (!menu || menu.width <= 0 || menu.height <= 0 || menu.display === 'none' || menu.visibility === 'hidden' || menu.opacity === '0' || menu.options === 0) {
       throw new Error(`Model picker did not open correctly: ${JSON.stringify(menu)}`);
     }
-    process.stdout.write(`Noobi model picker opened ${JSON.stringify(menu)}\n`);
+    process.stdout.write(`GU model picker opened ${JSON.stringify(menu)}\n`);
   }
-  if (process.env.NOOBI_SMOKE_VIEW === 'settings-noobi') {
+  if (process.env.GU_SMOKE_VIEW === 'settings-gu') {
     await window.webContents.executeJavaScript(
       `document.querySelector('.project-item')?.click()`,
       true,
@@ -2460,27 +2665,27 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
     const selectedSection = await window.webContents.executeJavaScript(
       `(() => {
         const trigger = Array.from(document.querySelectorAll('.settings-nav button'))
-          .find((node) => node.textContent?.includes('Noobi 工坊'));
+          .find((node) => node.textContent?.includes('GU 工坊'));
         if (!(trigger instanceof HTMLButtonElement)) return false;
         trigger.click();
         return true;
       })()`,
       true,
     ) as boolean;
-    if (!selectedSection) throw new Error('Noobi workshop settings section was not available');
+    if (!selectedSection) throw new Error('GU workshop settings section was not available');
     await delay(500);
     const crewCards = await window.webContents.executeJavaScript(
       `(() => {
-        const cards = Array.from(document.querySelectorAll('.noobi-crew-card'));
-        const buttons = Array.from(document.querySelectorAll('.noobi-crew-card-main'));
-        const images = Array.from(document.querySelectorAll('.noobi-crew-card img'));
-        const roleSlots = Array.from(document.querySelectorAll('.noobi-crew-role-slot.is-filled'));
-        const roleSelects = Array.from(document.querySelectorAll('.noobi-crew-role-control select'));
+        const cards = Array.from(document.querySelectorAll('.gu-crew-card'));
+        const buttons = Array.from(document.querySelectorAll('.gu-crew-card-main'));
+        const images = Array.from(document.querySelectorAll('.gu-crew-card img'));
+        const roleSlots = Array.from(document.querySelectorAll('.gu-crew-role-slot.is-filled'));
+        const roleSelects = Array.from(document.querySelectorAll('.gu-crew-role-control select'));
         const characterCards = Array.from(document.querySelectorAll('[data-pack-kind="character"]'));
-        const characterImages = Array.from(document.querySelectorAll('[data-pack-kind="character"] .noobi-character-avatar-image'));
-        const soloSceneCards = Array.from(document.querySelectorAll('.noobi-scene-card[data-scene-kind="solo"]'));
-        const multiplayerSceneCards = Array.from(document.querySelectorAll('.noobi-scene-card[data-scene-kind="multiplayer"]'));
-        const sceneImages = Array.from(document.querySelectorAll('.noobi-scene-card img'));
+        const characterImages = Array.from(document.querySelectorAll('[data-pack-kind="character"] .gu-character-avatar-image'));
+        const soloSceneCards = Array.from(document.querySelectorAll('.gu-scene-card[data-scene-kind="solo"]'));
+        const multiplayerSceneCards = Array.from(document.querySelectorAll('.gu-scene-card[data-scene-kind="multiplayer"]'));
+        const sceneImages = Array.from(document.querySelectorAll('.gu-scene-card img'));
         return {
           cards: cards.length,
           selected: buttons.filter((button) => button.getAttribute('aria-pressed') === 'true').length,
@@ -2499,7 +2704,7 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
           animatedScenes: multiplayerSceneCards.filter((card) => card.getAttribute('data-motion') === 'animated').length,
           sceneImages: sceneImages.length,
           loadedSceneImages: sceneImages.filter((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0).length,
-          activeMode: document.querySelector('.noobi-mode-panel.is-active')?.classList.contains('noobi-solo-panel') ? 'solo' : 'crew',
+          activeMode: document.querySelector('.gu-mode-panel.is-active')?.classList.contains('gu-solo-panel') ? 'solo' : 'crew',
         };
       })()`,
       true,
@@ -2523,9 +2728,9 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       loadedSceneImages: number;
       activeMode: string;
     };
-    const expectedPackCount = NOOBI_PACK_IDS.length;
+    const expectedPackCount = GU_PACK_IDS.length;
     const expectedImageCount = expectedPackCount * 2;
-    const expectedCrewCount = DEFAULT_NOOBI_CREW.length;
+    const expectedCrewCount = DEFAULT_GU_CREW.length;
     if (crewCards.cards !== expectedPackCount
       || crewCards.selected !== expectedCrewCount
       || crewCards.images !== expectedImageCount
@@ -2538,25 +2743,25 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       || crewCards.loadedCharacterImages !== expectedPackCount
       || crewCards.soloScenes !== expectedPackCount
       || crewCards.selectedSoloScenes !== 1
-      || crewCards.multiplayerScenes !== NOOBI_SCENE_IDS.length
+      || crewCards.multiplayerScenes !== GU_SCENE_IDS.length
       || crewCards.selectedMultiplayerScenes !== 0
       || crewCards.animatedScenes !== 1
-      || crewCards.sceneImages !== expectedPackCount + NOOBI_SCENE_IDS.length
-      || crewCards.loadedSceneImages !== expectedPackCount + NOOBI_SCENE_IDS.length
+      || crewCards.sceneImages !== expectedPackCount + GU_SCENE_IDS.length
+      || crewCards.loadedSceneImages !== expectedPackCount + GU_SCENE_IDS.length
       || crewCards.activeMode !== 'solo') {
-      throw new Error(`Noobi crew cards did not render correctly: ${JSON.stringify(crewCards)}`);
+      throw new Error(`GU crew cards did not render correctly: ${JSON.stringify(crewCards)}`);
     }
     process.stdout.write(
-      `Noobi workshop settings rendered one solo character, ${crewCards.soloScenes} solo scenes, and ${crewCards.multiplayerScenes} multiplayer scenes\n`,
+      `GU workshop settings rendered one solo character, ${crewCards.soloScenes} solo scenes, and ${crewCards.multiplayerScenes} multiplayer scenes\n`,
     );
-    const settingsScrollY = Number.parseInt(process.env.NOOBI_SMOKE_SETTINGS_SCROLL_Y ?? '', 10);
+    const settingsScrollY = Number.parseInt(process.env.GU_SMOKE_SETTINGS_SCROLL_Y ?? '', 10);
     if (Number.isFinite(settingsScrollY)) {
       await window.webContents.executeJavaScript(
         `document.querySelector('.settings-page')?.scrollTo({ top: ${Math.max(0, settingsScrollY)}, behavior: 'instant' })`,
         true,
       );
       await delay(250);
-    } else if (process.env.NOOBI_SMOKE_SETTINGS_TOP !== '1') {
+    } else if (process.env.GU_SMOKE_SETTINGS_TOP !== '1') {
       await window.webContents.executeJavaScript(
         `document.querySelector('.settings-page')?.scrollTo({ top: 99999, behavior: 'instant' })`,
         true,
@@ -2566,7 +2771,7 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       await delay(250);
     }
   }
-  if (process.env.NOOBI_SMOKE_VIEW === 'workbench') {
+  if (process.env.GU_SMOKE_VIEW === 'workbench') {
     await window.webContents.executeJavaScript(
       `document.querySelector('.project-item')?.click()`,
       true,
@@ -2576,15 +2781,15 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       `document.querySelector('.preview-pane iframe') instanceof HTMLIFrameElement`,
       true,
     ) as boolean;
-    if (process.env.NOOBI_SMOKE_STATUS === 'stopped') {
+    if (process.env.GU_SMOKE_STATUS === 'stopped') {
       const resumeVisible = await window.webContents.executeJavaScript(
         `Boolean(document.querySelector('.composer-action.is-resume[aria-label="继续制作"]'))`,
         true,
       ) as boolean;
       if (!resumeVisible) throw new Error('Stopped project did not show the resume action');
     }
-    const expectedScene = process.env.NOOBI_SMOKE_SCENE?.trim();
-    if (isNoobiSceneId(expectedScene)) {
+    const expectedScene = process.env.GU_SMOKE_SCENE?.trim();
+    if (isGuSceneId(expectedScene)) {
       const sceneState = await window.webContents.executeJavaScript(
         `(() => {
           const scene = document.querySelector('.production-diorama');
@@ -2618,12 +2823,12 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
         || sceneState.id !== expectedScene
         || !sceneState.loaded
         || !fishingSceneReady) {
-        throw new Error(`Noobi runtime background did not load correctly: ${JSON.stringify(sceneState)}`);
+        throw new Error(`GU runtime background did not load correctly: ${JSON.stringify(sceneState)}`);
       }
-      process.stdout.write(`Noobi runtime background loaded: ${sceneState.id}\n`);
-    } else if (process.env.NOOBI_SMOKE_EXPERIENCE_REPORT === 'expand' && hasPlayablePreview) {
-      process.stdout.write('Noobi workbench loaded a playable game preview\n');
-    } else if (process.env.NOOBI_SMOKE_CREW !== '1') {
+      process.stdout.write(`GU runtime background loaded: ${sceneState.id}\n`);
+    } else if (process.env.GU_SMOKE_EXPERIENCE_REPORT === 'expand' && hasPlayablePreview) {
+      process.stdout.write('GU workbench loaded a playable game preview\n');
+    } else if (process.env.GU_SMOKE_CREW !== '1') {
       const soloState = await window.webContents.executeJavaScript(
         `(() => {
           const scene = document.querySelector('.production-diorama');
@@ -2655,12 +2860,12 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
         || soloState.actors !== 1
         || !soloState.indicator
         || !soloState.loaded) {
-        throw new Error(`Noobi solo default did not load correctly: ${JSON.stringify(soloState)}`);
+        throw new Error(`GU solo default did not load correctly: ${JSON.stringify(soloState)}`);
       }
-      process.stdout.write('Noobi solo default loaded one character in the classic studio\n');
+      process.stdout.write('GU solo default loaded one character in the classic studio\n');
     }
   }
-  if (process.env.NOOBI_SMOKE_PROJECT_RAIL === '1') {
+  if (process.env.GU_SMOKE_PROJECT_RAIL === '1') {
     const opened = await window.webContents.executeJavaScript(
       `(() => {
         const trigger = document.querySelector(
@@ -2704,9 +2909,9 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       || !railState.closeVisible) {
       throw new Error(`Project rail did not open correctly: ${JSON.stringify(railState)}`);
     }
-    process.stdout.write(`Noobi project rail opened ${JSON.stringify(railState)}\n`);
+    process.stdout.write(`GU project rail opened ${JSON.stringify(railState)}\n`);
   }
-  if (process.env.NOOBI_SMOKE_PROJECT_MENU === '1') {
+  if (process.env.GU_SMOKE_PROJECT_MENU === '1') {
     const opened = await window.webContents.executeJavaScript(
       `(() => {
         const trigger = document.querySelector('.project-item-more');
@@ -2741,9 +2946,9 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       || !['重命名', '置顶', '删除'].every((label) => menuState.labels.includes(label))) {
       throw new Error(`Project action menu did not open correctly: ${JSON.stringify(menuState)}`);
     }
-    process.stdout.write(`Noobi project action menu opened ${JSON.stringify(menuState)}\n`);
+    process.stdout.write(`GU project action menu opened ${JSON.stringify(menuState)}\n`);
   }
-  if (process.env.NOOBI_SMOKE_GEAR_ALIGNMENT === '1') {
+  if (process.env.GU_SMOKE_GEAR_ALIGNMENT === '1') {
     const alignment = await window.webContents.executeJavaScript(
       `(() => {
         const rail = document.querySelector('.project-rail.mode-workbench');
@@ -2769,15 +2974,15 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       || Math.abs(alignment.settingsCenter - alignment.runtimeCenter) > 1) {
       throw new Error(`Collapsed settings icon is not centered: ${JSON.stringify(alignment)}`);
     }
-    process.stdout.write(`Noobi collapsed settings icon aligned ${JSON.stringify(alignment)}\n`);
+    process.stdout.write(`GU collapsed settings icon aligned ${JSON.stringify(alignment)}\n`);
   }
-  if (process.env.NOOBI_SMOKE_CREW === '1') {
+  if (process.env.GU_SMOKE_CREW === '1') {
     const crewState = await window.webContents.executeJavaScript(
       `(() => {
         const scene = document.querySelector('.production-diorama');
         const actors = Array.from(document.querySelectorAll('.production-crew-member'));
         const roles = actors.map((actor) => actor.getAttribute('data-crew-role') ?? '');
-        const packs = actors.map((actor) => actor.getAttribute('data-noobi-member-pack') ?? '');
+        const packs = actors.map((actor) => actor.getAttribute('data-gu-member-pack') ?? '');
         const shadows = actors.filter((actor) => actor.querySelector('.production-assistant-shadow'));
         return scene instanceof HTMLElement ? {
           mode: scene.dataset.sceneMode ?? '',
@@ -2803,24 +3008,24 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
     } | null;
     if (!crewState
       || crewState.mode !== 'collaboration'
-      || crewState.count !== DEFAULT_NOOBI_CREW.length
+      || crewState.count !== DEFAULT_GU_CREW.length
       || crewState.uniqueRoles !== crewState.count
       || crewState.uniquePacks !== crewState.count
       || crewState.shadows !== crewState.count
       || crewState.primary !== 1) {
-      throw new Error(`Noobi collaboration crew did not load correctly: ${JSON.stringify(crewState)}`);
+      throw new Error(`GU collaboration crew did not load correctly: ${JSON.stringify(crewState)}`);
     }
     process.stdout.write(
-      `Noobi collaboration crew loaded ${crewState.count} unique specialists: ${crewState.roles.join(', ')}\n`,
+      `GU collaboration crew loaded ${crewState.count} unique specialists: ${crewState.roles.join(', ')}\n`,
     );
   }
-  const expectedPack = process.env.NOOBI_SMOKE_PACK?.trim();
-  if (isNoobiPackId(expectedPack)) {
+  const expectedPack = process.env.GU_SMOKE_PACK?.trim();
+  if (isGuPackId(expectedPack)) {
     const initialFrame = await window.webContents.executeJavaScript(
       `(() => {
         const scene = document.querySelector('.production-diorama');
-        const actor = document.querySelector('.production-crew-member[data-noobi-member-pack="${expectedPack}"]');
-        const sprite = actor?.querySelector('.noobi-pixel-sprite');
+        const actor = document.querySelector('.production-crew-member[data-gu-member-pack="${expectedPack}"]');
+        const sprite = actor?.querySelector('.gu-pixel-sprite');
         const shadow = actor?.querySelector('.production-assistant-shadow');
         if (!(scene instanceof HTMLElement)
           || !(actor instanceof HTMLElement)
@@ -2828,7 +3033,7 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
           || !(shadow instanceof HTMLElement)) return null;
         const shadowStyle = getComputedStyle(shadow);
         return {
-          pack: actor.dataset.noobiMemberPack ?? '',
+          pack: actor.dataset.guMemberPack ?? '',
           manifest: sprite.dataset.manifest ?? '',
           frame: sprite.dataset.frameIndex ?? '',
           count: Number(sprite.dataset.frameCount ?? 0),
@@ -2858,27 +3063,27 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       || initialFrame.shadowWidth < 12
       || initialFrame.shadowHeight < 3
       || !initialFrame.shadowProfile) {
-      throw new Error(`Noobi production pack did not load: ${JSON.stringify(initialFrame)}`);
+      throw new Error(`GU production pack did not load: ${JSON.stringify(initialFrame)}`);
     }
     let frameChanged = false;
     for (let attempt = 0; attempt < 25 && !frameChanged; attempt += 1) {
       await delay(80);
       const currentFrame = await window.webContents.executeJavaScript(
-        `document.querySelector('.production-crew-member[data-noobi-member-pack="${expectedPack}"] .noobi-pixel-sprite')?.getAttribute('data-frame-index') ?? ''`,
+        `document.querySelector('.production-crew-member[data-gu-member-pack="${expectedPack}"] .gu-pixel-sprite')?.getAttribute('data-frame-index') ?? ''`,
         true,
       ) as string;
       frameChanged = currentFrame !== initialFrame.frame;
     }
     if (!frameChanged) {
-      throw new Error(`Noobi multi-frame animation did not advance: ${JSON.stringify(initialFrame)}`);
+      throw new Error(`GU multi-frame animation did not advance: ${JSON.stringify(initialFrame)}`);
     }
     process.stdout.write(
-      `Noobi production pack ${expectedPack} loaded ${initialFrame.manifest} with ${initialFrame.count} keyed frames and ${initialFrame.shadowProfile} ground shadow\n`,
+      `GU production pack ${expectedPack} loaded ${initialFrame.manifest} with ${initialFrame.count} keyed frames and ${initialFrame.shadowProfile} ground shadow\n`,
     );
   }
-  if (process.env.NOOBI_SMOKE_ASSISTANT_MOTION === '1') {
+  if (process.env.GU_SMOKE_ASSISTANT_MOTION === '1') {
     const initial = await readSmokeAssistantState(window);
-    if (!initial || initial.stage !== process.env.NOOBI_SMOKE_STAGE) {
+    if (!initial || initial.stage !== process.env.GU_SMOKE_STAGE) {
       throw new Error(`Production assistant did not reach the requested stage: ${JSON.stringify(initial)}`);
     }
     let changed = false;
@@ -2892,9 +3097,9 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       ));
     }
     if (!changed) throw new Error(`Production assistant did not change action or position: ${JSON.stringify(initial)}`);
-    process.stdout.write(`Noobi production assistant moved from ${initial.action} at ${initial.station}\n`);
+    process.stdout.write(`GU production assistant moved from ${initial.action} at ${initial.station}\n`);
   }
-  if (process.env.NOOBI_SMOKE_RENAME_TITLE === '1') {
+  if (process.env.GU_SMOKE_RENAME_TITLE === '1') {
     const workbenchBrandCanExpand = await window.webContents.executeJavaScript(
       `(() => {
         const brand = document.querySelector('.project-rail.mode-workbench .brand');
@@ -2928,7 +3133,7 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
     })`,
     true,
   );
-  if (process.env.NOOBI_SMOKE_TAB === 'assets') {
+  if (process.env.GU_SMOKE_TAB === 'assets') {
     await window.webContents.executeJavaScript(
       `Array.from(document.querySelectorAll('.inspector-tabs button'))
         .find((node) => node.textContent?.includes('素材'))?.click()`,
@@ -2936,7 +3141,7 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
     );
     await delay(350);
   }
-  if (process.env.NOOBI_SMOKE_EXPERIENCE_REPORT === 'expand') {
+  if (process.env.GU_SMOKE_EXPERIENCE_REPORT === 'expand') {
     let reportControlsReady = false;
     for (let attempt = 0; attempt < 20 && !reportControlsReady; attempt += 1) {
       reportControlsReady = await window.webContents.executeJavaScript(
@@ -3001,7 +3206,7 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
       throw new Error(`Experience report did not expand correctly: ${JSON.stringify({ collapsed, expanded })}`);
     }
     process.stdout.write(
-      `Noobi experience report opened as ${expanded.width}x${expanded.height}px without resizing the ${expanded.previewHeight}px preview\n`,
+      `GU experience report opened as ${expanded.width}x${expanded.height}px without resizing the ${expanded.previewHeight}px preview\n`,
     );
     await delay(250);
   }
@@ -3010,9 +3215,9 @@ async function captureSmoke(window: BrowserWindow, target: string): Promise<void
   await mkdir(dirname(output), { recursive: true });
   const { writeFile } = await import('node:fs/promises');
   await writeFile(output, image.toPNG());
-  process.stdout.write(`Noobi UI smoke captured ${output}\n`);
-  if (process.env.NOOBI_SMOKE_HOLD === '1') {
-    process.stdout.write('Noobi UI smoke window left open for inspection\n');
+  process.stdout.write(`GU UI smoke captured ${output}\n`);
+  if (process.env.GU_SMOKE_HOLD === '1') {
+    process.stdout.write('GU UI smoke window left open for inspection\n');
     return;
   }
   app.quit();
@@ -3051,12 +3256,16 @@ async function readSmokeAssistantState(window: BrowserWindow): Promise<{
 
 async function shutdown(): Promise<void> {
   approvalBroker?.closeAll();
+  const stopBriefs = creationBriefPlanner?.dispose().catch(() => undefined);
+  const stopSpeech = speechTranscriptionService?.dispose().catch(() => undefined);
   for (const controller of manualExperienceControllers.values()) controller.abort();
   manualExperienceControllers.clear();
   const projects = projectStore ? await projectStore.list().catch(() => []) : [];
   const stopRuns = Promise.allSettled(projects.map((project) => harness.stop(project.id)));
   await Promise.race([stopRuns, delay(5_000)]);
   await Promise.allSettled([previews.stopAll(), playtestPreviews.stopAll(), runtime.stop()]);
+  await stopBriefs;
+  await stopSpeech;
   await Promise.race([Promise.allSettled([...backgroundRuns]), delay(2_000)]);
   await projectStore?.list().catch(() => undefined);
   await eventLog?.flush().catch(() => undefined);
@@ -3070,7 +3279,7 @@ async function recoverInterruptedProjects(): Promise<void> {
       .map((project) => projectStore.update(project.id, {
         status: 'stopped',
         activeTurnId: null,
-        lastError: 'Noobi.ai 上次退出时，该任务没有确认完成。请检查文件后再继续。',
+        lastError: 'GU.AI 上次退出时，该任务没有确认完成。请检查文件后再继续。',
       })),
   );
 }
@@ -3137,25 +3346,25 @@ function validateSettingsPatch(value: Partial<AppSettings>): Partial<AppSettings
     'defaultWorkspace',
     'defaultModel',
     'defaultEffort',
-    'defaultNoobiStageMode',
-    'defaultNoobiSoloSceneId',
-    'defaultNoobiSceneId',
-    'defaultNoobiPackId',
-    'defaultNoobiCrew',
+    'defaultGuStageMode',
+    'defaultGuSoloSceneId',
+    'defaultGuSceneId',
+    'defaultGuPackId',
+    'defaultGuCrew',
     'theme',
   ]);
   for (const key of Object.keys(value)) if (!allowed.has(key)) throw new Error(`未知设置：${key}`);
-  if (value.defaultNoobiStageMode !== undefined
-    && !isNoobiStageMode(value.defaultNoobiStageMode)) {
-    throw new Error('无效的 Noobi 舞台模式');
+  if (value.defaultGuStageMode !== undefined
+    && !isGuStageMode(value.defaultGuStageMode)) {
+    throw new Error('无效的 GU 舞台模式');
   }
-  if (value.defaultNoobiSoloSceneId !== undefined
-    && !isNoobiPackId(value.defaultNoobiSoloSceneId)) {
-    throw new Error('无效的 Noobi 单人场景');
+  if (value.defaultGuSoloSceneId !== undefined
+    && !isGuPackId(value.defaultGuSoloSceneId)) {
+    throw new Error('无效的 GU 单人场景');
   }
-  if (value.defaultNoobiSceneId !== undefined
-    && !isNoobiSceneId(value.defaultNoobiSceneId)) {
-    throw new Error('无效的 Noobi 场景');
+  if (value.defaultGuSceneId !== undefined
+    && !isGuSceneId(value.defaultGuSceneId)) {
+    throw new Error('无效的 GU 场景');
   }
   return value;
 }

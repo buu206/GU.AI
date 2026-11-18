@@ -12,7 +12,7 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { NOOBI_PACK_IDS } from '../shared/contracts';
+import { GU_PACK_IDS } from '../shared/contracts';
 
 const BASE_POSE_NAMES = [
   'idle', 'walk-a', 'walk-b', 'work', 'paint',
@@ -76,7 +76,7 @@ interface PngBitmap {
 }
 
 const require = createRequire(import.meta.url);
-const extractor = require('../../scripts/extract-noobi-sprites.cjs') as ExtractorApi;
+const extractor = require('../../scripts/extract-gu-sprites.cjs') as ExtractorApi;
 const { PNG } = require('pngjs') as {
   PNG: {
     new(options: { width: number; height: number; colorType: number }): PngBitmap;
@@ -183,7 +183,7 @@ function writeSyntheticActionSheet(filePath: string): void {
   writeFileSync(filePath, PNG.sync.write(image));
 }
 
-describe('Noobi sprite extraction scale', () => {
+describe('GU sprite extraction scale', () => {
   it('matches an alternate action frame to the canonical A-frame body height', () => {
     const canonical = { minX: 20, minY: 10, maxX: 225, maxY: 257 }; // 248 px
     const alternate = { minX: 22, minY: 30, maxX: 223, maxY: 232 }; // 203 px
@@ -206,7 +206,7 @@ describe('Noobi sprite extraction scale', () => {
 
   it('ships complete source sheets, layouts, and 30 rendered frames for every registered pack', () => {
     const root = resolve(process.cwd(), 'src/renderer/assets/noobi-packs');
-    expect(NOOBI_PACK_IDS).toEqual(expect.arrayContaining(['twilight', 'hellokitty']));
+    expect(GU_PACK_IDS).toEqual(expect.arrayContaining(['twilight', 'hellokitty']));
     const collaborationScene = PNG.sync.read(readFileSync(
       resolve(root, 'collaboration/scene.png'),
     ));
@@ -223,7 +223,7 @@ describe('Noobi sprite extraction scale', () => {
     ]);
     const expectedFrameNames = [...expectedBaseFrameNames, ...expectedExtraFrameNames].sort();
 
-    for (const packId of NOOBI_PACK_IDS) {
+    for (const packId of GU_PACK_IDS) {
       const packRoot = resolve(root, packId);
       const framesRoot = resolve(packRoot, 'frames');
       for (const sourceAsset of REQUIRED_SOURCE_ASSETS) {
@@ -282,7 +282,7 @@ describe('Noobi sprite extraction scale', () => {
   }, 15_000);
 
   it('extracts a standalone 5x2 extra-action sheet without replacing base poses', () => {
-    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'noobi-action-sheet-'));
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'gu-action-sheet-'));
     try {
       const inputPath = resolve(temporaryRoot, 'extra-actions.png');
       const outputDirectory = resolve(temporaryRoot, 'frames');
@@ -339,7 +339,7 @@ describe('Noobi sprite extraction scale', () => {
   });
 
   it('reuses the base pose layout scale for a separately generated action sheet', () => {
-    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'noobi-unified-action-scale-'));
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'gu-unified-action-scale-'));
     try {
       const inputPath = resolve(temporaryRoot, 'extra-actions.png');
       const outputDirectory = resolve(temporaryRoot, 'frames');
@@ -385,7 +385,7 @@ describe('Noobi sprite extraction scale', () => {
   });
 
   it('rejects an invalid base layout scale instead of silently changing sprite size', () => {
-    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'noobi-invalid-base-scale-'));
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'gu-invalid-base-scale-'));
     try {
       const inputPath = resolve(temporaryRoot, 'extra-actions.png');
       const outputDirectory = resolve(temporaryRoot, 'frames');

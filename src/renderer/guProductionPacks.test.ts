@@ -1,27 +1,31 @@
 import { describe, expect, it } from 'vitest';
 
-import { NOOBI_PACK_IDS } from '../shared/contracts';
-import { noobiManifestSources } from './noobiAnimation';
-import { noobiProductionPack } from './noobiProductionPacks';
+import { GU_PACK_IDS } from '../shared/contracts';
+import { guManifestSources } from './guAnimation';
+import { guProductionPack } from './guProductionPacks';
 
-describe('Noobi production packs', () => {
+describe('GU production packs', () => {
   it('ships a matching scene and complete animation manifest for every selectable pack', () => {
-    for (const packId of NOOBI_PACK_IDS) {
-      const pack = noobiProductionPack(packId);
+    for (const packId of GU_PACK_IDS) {
+      const pack = guProductionPack(packId);
       expect(pack.id).toBe(packId);
-      expect(pack.sceneImage).toMatch(/\.png$/);
+      expect(pack.sceneImage).toMatch(/^data:image\/svg\+xml/u);
+      expect(decodeURIComponent(pack.sceneImage)).toContain('data-cyber-art');
       expect(Object.keys(pack.spriteManifest.animations)).toHaveLength(16);
-      expect(noobiManifestSources(pack.spriteManifest).length).toBeGreaterThanOrEqual(30);
+      for (const source of guManifestSources(pack.spriteManifest)) {
+        expect(source).toMatch(/^data:image\/svg\+xml/u);
+        expect(decodeURIComponent(source)).toContain('data-cyber-art');
+      }
       expect(pack.spriteManifest.canvas).toEqual({
-        width: 252,
-        height: 336,
-        pivot: { x: 126, y: 320 },
+        width: 64,
+        height: 64,
+        pivot: { x: 32, y: 60 },
       });
     }
   });
 
   it('uses authored multi-keyframe clips for movement and every production action', () => {
-    const manifest = noobiProductionPack('classic').spriteManifest;
+    const manifest = guProductionPack('classic').spriteManifest;
     expect(manifest.animations.walk.frames).toHaveLength(4);
     expect(manifest.animations.work.frames).toHaveLength(4);
     expect(manifest.animations.paint.frames).toHaveLength(5);

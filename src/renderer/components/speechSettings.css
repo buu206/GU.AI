@@ -1,0 +1,35 @@
+.speech-settings-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.speech-settings-help {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.speech-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.speech-settings-error,
+.speech-settings-feedback {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.speech-settings-error { color: var(--red); }
+.speech-settings-feedback { color: var(--muted); }

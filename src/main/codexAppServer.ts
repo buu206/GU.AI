@@ -1,3 +1,4 @@
+import { systemProxyEnvironment } from './systemProxy.js';
 import { EventEmitter } from 'node:events';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
@@ -143,6 +144,11 @@ export interface StartThreadOptions {
   developerInstructions?: string;
   ephemeral?: boolean;
   dynamicTools?: DynamicToolSpec[];
+  /** Per-thread overrides; these never write the user's global configuration. */
+  config?: Record<string, JsonValue>;
+  baseInstructions?: string;
+  environments?: [];
+  runtimeWorkspaceRoots?: string[];
 }
 
 export interface StartTurnOptions {
@@ -155,6 +161,10 @@ export interface StartTurnOptions {
   skills?: Array<{ name: string; path: string }>;
   /** Host-side completion deadline; never sent to App Server. */
   timeoutMs?: number;
+  outputSchema?: JsonValue;
+  sandboxPolicy?: { type: 'readOnly'; networkAccess: false };
+  /** Host-only cancellation. Completion is withheld until the turn has stopped. */
+  signal?: AbortSignal;
 }
 
 export interface CodexAppServerOptions {
@@ -317,10 +327,11 @@ export class CodexAppServer extends EventEmitter {
     return statuses;
   }
 
-  async readConfig(): Promise<Record<string, unknown>> {
+  async readConfig(cwd?: string): Promise<Record<string, unknown>> {
     await this.start();
     const result = await this.#request<{ config: Record<string, unknown> }>('config/read', {
       includeLayers: false,
+      ...(cwd ? { cwd } : {}),
     });
     return structuredClone(result.config);
   }
@@ -366,6 +377,10 @@ export class CodexAppServer extends EventEmitter {
         : {}),
       ...(options.ephemeral === undefined ? {} : { ephemeral: options.ephemeral }),
       ...(options.dynamicTools ? { dynamicTools: options.dynamicTools } : {}),
+      ...(options.config ? { config: options.config } : {}),
+      ...(options.baseInstructions ? { baseInstructions: options.baseInstructions } : {}),
+      ...(options.environments ? { environments: options.environments } : {}),
+      ...(options.runtimeWorkspaceRoots ? { runtimeWorkspaceRoots: options.runtimeWorkspaceRoots } : {}),
       experimentalRawEvents: false,
     });
     return result.thread.id;
@@ -389,6 +404,7 @@ export class CodexAppServer extends EventEmitter {
 
   async startTurn(options: StartTurnOptions): Promise<string> {
     await this.start();
+    if (options.signal?.aborted) throw turnAbortedError();
     const result = await this.#request<TurnStartResponse>('turn/start', {
       threadId: options.threadId,
       input: [
@@ -403,11 +419,14 @@ export class CodexAppServer extends EventEmitter {
       ...(options.model ? { model: options.model } : {}),
       ...(options.effort ? { effort: options.effort } : {}),
       ...(options.approvalPolicy ? { approvalPolicy: options.approvalPolicy } : {}),
+      ...(options.outputSchema ? { outputSchema: options.outputSchema } : {}),
+      ...(options.sandboxPolicy ? { sandboxPolicy: options.sandboxPolicy } : {}),
     });
     return result.turn.id;
   }
 
   async runTurn(options: StartTurnOptions): Promise<TurnResult> {
+    if (options.signal?.aborted) throw turnAbortedError();
     this.#runTurnStartsInFlight += 1;
     let turnId: string;
     try {
@@ -421,20 +440,58 @@ export class CodexAppServer extends EventEmitter {
     this.#earlyTurnStates.delete(turnId);
     if (early?.completed) {
       this.#releaseRunTurnStart();
+      if (options.signal?.aborted) throw turnAbortedError();
       return early.completed;
     }
 
     return new Promise<TurnResult>((resolve, reject) => {
+      let settled = false;
+      let cancelling = false;
+      let cancellationTimer: NodeJS.Timeout | undefined;
+      const cleanup = () => {
+        clearTimeout(timer);
+        clearTimeout(cancellationTimer);
+        options.signal?.removeEventListener('abort', abort);
+        this.#turnWaiters.delete(turnId);
+      };
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+      const finish = (result: TurnResult) => {
+        if (settled) return;
+        if (cancelling || options.signal?.aborted) { fail(turnAbortedError()); return; }
+        settled = true;
+        cleanup();
+        resolve(result);
+      };
+      const abort = () => {
+        if (settled || cancelling) return;
+        cancelling = true;
+        clearTimeout(timer);
+        // An interrupt ACK only acknowledges receipt. Keep the waiter until
+        // turn/completed so the UI never claims a still-running turn stopped.
+        cancellationTimer = setTimeout(() => {
+          fail(new Error('取消请求已发送，但尚未确认模型停止。请检查运行时连接。'));
+        }, 10_000);
+        cancellationTimer.unref();
+        void this.interruptTurn(options.threadId, turnId).catch(() => {
+          fail(new Error('无法确认模型已停止。请检查运行时连接。'));
+        });
+      };
       const timeoutMs = options.timeoutMs === undefined
         ? TURN_TIMEOUT_MS
         : Math.min(TURN_TIMEOUT_MS, Math.max(1_000, Math.trunc(options.timeoutMs)));
       const timer = setTimeout(() => {
-        this.#turnWaiters.delete(turnId);
         void this.interruptTurn(options.threadId, turnId).catch(() => undefined);
-        reject(new Error(`Codex turn ${turnId} timed out`));
+        fail(new Error('Codex 请求超时，请检查网络或系统代理后重试。原始想法已保留。'));
       }, timeoutMs);
       timer.unref();
-      this.#turnWaiters.set(turnId, { text: early?.text ?? '', resolve, reject, timer });
+      this.#turnWaiters.set(turnId, { text: early?.text ?? '', resolve: finish, reject: fail, timer });
+      options.signal?.addEventListener('abort', abort, { once: true });
+      if (options.signal?.aborted) abort();
       this.#releaseRunTurnStart();
     });
   }
@@ -503,10 +560,12 @@ export class CodexAppServer extends EventEmitter {
       this.#assertGeneration(generation);
       const version = readCodexVersion(binaryPath);
       this.#assertGeneration(generation);
+      const proxyEnvironment = await systemProxyEnvironment();
       child = spawn(binaryPath, ['app-server', '--listen', 'stdio://', '--strict-config'], {
         cwd: process.cwd(),
         env: {
           ...process.env,
+          ...proxyEnvironment,
           RUST_LOG: process.env.RUST_LOG ?? 'warn',
           LOG_FORMAT: 'json',
           ...(this.#configuredCodexHome ? { CODEX_HOME: this.#configuredCodexHome } : {}),
@@ -542,8 +601,8 @@ export class CodexAppServer extends EventEmitter {
 
       const initialized = await peer.request<InitializeResponse>('initialize', {
         clientInfo: {
-          name: 'noobi_ai',
-          title: 'Noobi.ai Game Agent',
+          name: 'gu_ai',
+          title: 'GU.AI Game Agent',
           version: '0.1.0',
         },
         capabilities: {
@@ -697,6 +756,12 @@ function readString(value: unknown): string | null {
 
 function asError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
+}
+
+function turnAbortedError(): Error {
+  const error = new Error('已取消方案整理');
+  error.name = 'AbortError';
+  return error;
 }
 
 function sanitizeDiagnostic(value: string): string {

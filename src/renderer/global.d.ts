@@ -1,8 +1,8 @@
-import type { NoobiApi } from '../shared/contracts';
+import type { GuApi } from '../shared/contracts';
 
 declare global {
   interface Window {
-    noobi: NoobiApi;
+    gu: GuApi;
   }
 }
 

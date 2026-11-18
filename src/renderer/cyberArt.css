@@ -1,0 +1,141 @@
+/* Artwork surfaces share the approved desktop palette, including transient states. */
+.production-diorama {
+  --iso-ink: #181126;
+  --iso-deep: #342044;
+  --iso-teal-dark: #2b687f;
+  --iso-teal: #64e5df;
+  --iso-mint: #93f5df;
+  --iso-salmon: #df5bac;
+  --iso-peach: #ffb86b;
+  --iso-cream: #ded4ef;
+  color: #ded4ef;
+  font-family: var(--pixel-cjk), monospace;
+  border-color: #65507f;
+  background: #0c0a1d;
+  box-shadow: 0 0 0 2px #241b38, 5px 6px 0 #090815;
+}
+
+.production-diorama .workshop-map,
+.production-diorama[data-runtime-scene='fishing'],
+.production-diorama[data-runtime-scene='fishing'] .workshop-map {
+  background: #0c0a1d;
+}
+
+.production-diorama[data-runtime-scene='fishing'] { aspect-ratio: 793 / 496; }
+.production-diorama .workshop-map img { object-fit: fill; }
+
+.production-diorama .diorama-narration {
+  width: auto;
+  max-width: min(330px, calc(100% - 28px));
+  max-height: none;
+  border-color: #65507f;
+  background: #181126;
+  box-shadow: 4px 4px 0 #090815;
+  padding: 12px 16px;
+}
+.production-diorama .diorama-narration > span { color: #82e8dd; font-size: 9px; }
+.production-diorama .diorama-narration strong { color: #e9e0f3; font-size: 16px; }
+.production-diorama .diorama-narration p { display: none; }
+.production-diorama .diorama-narration::before,
+.production-diorama .diorama-narration::after { background: #df5bac; }
+.production-diorama .diorama-action {
+  max-width: calc(100% - 24px);
+  border-color: #65507f;
+  background: #181126;
+  box-shadow: 3px 3px 0 #090815;
+}
+.production-diorama .diorama-action b { color: #e9e0f3; font-size: 10px; }
+.production-diorama .diorama-action em { color: #ff93dc; }
+.production-diorama .production-crew-role-pin { color: #181126; }
+.production-diorama .production-assistant { width: 72px; height: 72px; }
+.production-diorama .gu-pixel-sprite { width: 100%; height: 100%; }
+.production-diorama .assistant-mini-gu,
+.production-diorama .gu-pixel-sprite.is-mini { width: 32px; height: 32px; }
+.production-diorama.status-completed { box-shadow: 0 0 0 2px #65eee3, 5px 6px 0 #090815; }
+.production-diorama.status-failed,
+.production-diorama.status-stopped { box-shadow: 0 0 0 2px #df5bac, 5px 6px 0 #090815; }
+
+.pixel-page-transition {
+  --pixel-ui-ink: #161025;
+  --pixel-ui-deep: #0c0a1d;
+  --pixel-ui-teal: #65eee3;
+}
+.pixel-transition-scene {
+  width: min(720px, calc(100vw - 48px));
+  aspect-ratio: 16 / 10;
+  background: #0c0a1d;
+  border: 3px solid #65507f;
+  box-shadow: 8px 8px 0 #090815;
+}
+.pixel-transition-scene > img { object-fit: fill; filter: none; }
+
+.loading-screen,
+.launch-transition {
+  background: #0c0a1d;
+  color: #ded4ef;
+  font-family: var(--pixel-cjk), monospace;
+}
+.loading-brand strong { color: #93f5df; }
+.loading-cyber-scene {
+  position: relative;
+  width: min(520px, calc(100vw - 48px));
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 3px solid #65507f;
+  box-shadow: 6px 6px 0 #241b38;
+  image-rendering: pixelated;
+}
+.loading-cyber-scene > img:first-child { display: block; width: 100%; height: 100%; }
+.loading-cyber-scene .loading-cyber-ranger { position: absolute; width: 20%; height: auto; left: 40%; bottom: 12%; }
+.loading-brand small,
+.loading-progress,
+.launch-transition-copy span { color: #b9a6ce; }
+.loading-progress span { background: #65eee3; border-radius: 0; }
+.launch-transition-copy strong { color: #e9e0f3; }
+.launch-transition-track { background: #241b38; border-color: #65507f; }
+.launch-transition-track::after { background: #df5bac; }
+.launch-transition-runner { width: 80px; height: 80px; }
+
+.gu-pack-preview,
+.gu-scene-preview,
+.gu-character-preview { background-color: #0c0a1d; }
+.gu-pack-avatar-image,
+.gu-character-avatar-image { object-fit: contain; image-rendering: pixelated; }
+.gu-pack-card,
+.gu-crew-card {
+  --panel: #1b1531;
+  --text: #ece5f8;
+  --muted: #b1a3c8;
+  --faint: #ad98c2;
+  --line: #65507f;
+  --line-strong: #a680b3;
+  --accent: #8cfbea;
+  border-radius: 0;
+}
+.gu-pack-card[data-pack-kind='character'] { --character-base: #1b1531; --character-glow: #df5bac; }
+.gu-pack-card[data-pack-kind='character'].pack-mosslight { --character-base: #132a2e; --character-glow: #79fff0; }
+.gu-pack-card[data-pack-kind='character'].pack-starforge { --character-base: #161d37; --character-glow: #67e9ff; }
+.gu-pack-card[data-pack-kind='character'].pack-twilight { --character-base: #241b39; --character-glow: #e1b3ff; }
+.gu-pack-card[data-pack-kind='character'].pack-hellokitty { --character-base: #291b30; --character-glow: #ffdc93; }
+.gu-pack-card[data-pack-kind='character'] .gu-character-preview {
+  background:
+    linear-gradient(90deg, transparent 17px, #382943 17px 18px),
+    linear-gradient(transparent 17px, #382943 17px 18px),
+    var(--character-base);
+  background-size: 18px 18px;
+}
+.gu-pack-card .gu-character-avatar-image {
+  width: 90%;
+  height: 90%;
+  bottom: 5%;
+  max-height: none;
+  filter: none;
+}
+.gu-crew-card .gu-pack-preview { background: #181126; }
+.gu-character-pixel-grid { border-color: var(--character-glow, #65eee3); box-shadow: none; }
+
+@media (max-width: 760px) {
+  .production-diorama .production-assistant { width: 56px; height: 56px; }
+  .production-diorama .diorama-narration { padding: 9px 12px; }
+  .production-diorama .diorama-narration strong { font-size: 13px; }
+}

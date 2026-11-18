@@ -1,3 +1,4 @@
+import { useConfirmation } from './Confirmation';
 import {
   Boxes,
   Cable,
@@ -10,6 +11,7 @@ import {
   KeyRound,
   LogIn,
   LogOut,
+  Mic,
   Monitor,
   Palette,
   RefreshCw,
@@ -26,18 +28,19 @@ import type {
   RuntimeStatus,
 } from '../../shared/contracts';
 import {
-  DEFAULT_NOOBI_CREW,
-  DEFAULT_NOOBI_PACK_ID,
-  DEFAULT_NOOBI_SCENE_ID,
-  DEFAULT_NOOBI_SOLO_SCENE_ID,
-  DEFAULT_NOOBI_STAGE_MODE,
+  DEFAULT_GU_CREW,
+  DEFAULT_GU_PACK_ID,
+  DEFAULT_GU_SCENE_ID,
+  DEFAULT_GU_SOLO_SCENE_ID,
+  DEFAULT_GU_STAGE_MODE,
 } from '../../shared/contracts';
 import { runtimeLabel, toMessage } from '../ui';
 import { Modal } from './Modal';
 import { EnvironmentSettings } from './EnvironmentSettings';
-import { NoobiCrewPicker } from './NoobiCrewPicker';
-import { NoobiPackPicker } from './NoobiPackPicker';
-import { NoobiScenePicker, NoobiSoloScenePicker } from './NoobiScenePicker';
+import { SpeechSettings } from './SpeechSettings';
+import { GuCrewPicker } from './GuCrewPicker';
+import { GuPackPicker } from './GuPackPicker';
+import { GuScenePicker, GuSoloScenePicker } from './GuScenePicker';
 import {
   McpSettings,
   MediaApiSettings,
@@ -46,7 +49,7 @@ import {
   useExtensionSettings,
 } from './SettingsExtensions';
 
-export type SettingsSection = 'account' | 'environment' | 'media' | 'defaults' | 'noobi' | 'skills' | 'mcp' | 'prompts' | 'appearance';
+export type SettingsSection = 'account' | 'environment' | 'media' | 'speech' | 'defaults' | 'gu' | 'skills' | 'mcp' | 'prompts' | 'appearance';
 
 interface SettingsModalProps {
   value: AppSettings;
@@ -61,12 +64,13 @@ const SECTIONS = [
   { id: 'account', label: 'Codex 账户', detail: '登录与运行时', icon: KeyRound },
   { id: 'environment', label: '环境管理', detail: 'Node、Codex、Godot', icon: Cpu },
   { id: 'media', label: '媒体 API', detail: '图像、音频、3D', icon: Boxes },
+  { id: 'speech', label: '语音识别', detail: '录音转文字', icon: Mic },
   { id: 'defaults', label: '项目默认值', detail: '目录、模型、推理', icon: Settings2 },
-  { id: 'noobi', label: 'Noobi 工坊', detail: '伙伴形象与场景', icon: Palette },
+  { id: 'gu', label: '赛博工作台', detail: '游侠装备与场景', icon: Palette },
   { id: 'skills', label: 'Skills', detail: 'Agent 专业能力', icon: FileCode2 },
   { id: 'mcp', label: 'MCP Servers', detail: '工具与数据连接', icon: Cable },
   { id: 'prompts', label: '提示词', detail: '分角色模板', icon: FileText },
-  { id: 'appearance', label: '外观', detail: '深色与浅色', icon: SunMoon },
+  { id: 'appearance', label: '外观', detail: '像素赛博主题', icon: SunMoon },
 ] as const;
 
 export function SettingsModal({
@@ -77,6 +81,7 @@ export function SettingsModal({
   onSaved,
   onRuntime,
 }: SettingsModalProps) {
+  const confirm = useConfirmation();
   const [section, setSection] = useState<SettingsSection>(initialSection);
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
@@ -84,7 +89,8 @@ export function SettingsModal({
   const [login, setLogin] = useState<LoginStartResult | null>(null);
   const [promptDirty, setPromptDirty] = useState(false);
   const [promptBusy, setPromptBusy] = useState(false);
-  const extensions = useExtensionSettings(setMessage);
+  const [speechBusy, setSpeechBusy] = useState(false);
+  const extensions = useExtensionSettings(setMessage, ['media', 'skills', 'mcp', 'prompts'].includes(section));
 
   useEffect(() => setDraft(value), [value]);
 
@@ -95,13 +101,13 @@ export function SettingsModal({
   const efforts = selectedModel?.efforts.length
     ? selectedModel.efforts
     : ['minimal', 'low', 'medium', 'high', 'xhigh'];
-  const noobiStageMode = draft.defaultNoobiStageMode ?? DEFAULT_NOOBI_STAGE_MODE;
+  const guStageMode = draft.defaultGuStageMode ?? DEFAULT_GU_STAGE_MODE;
 
   async function refreshRuntime() {
     setBusy(true);
     setMessage('');
     try {
-      onRuntime(await window.noobi.refreshRuntime());
+      onRuntime(await window.gu.refreshRuntime());
       setMessage('运行时状态已刷新。');
     } catch (error) {
       setMessage(toMessage(error));
@@ -114,7 +120,7 @@ export function SettingsModal({
     setBusy(true);
     setMessage('');
     try {
-      const result = await window.noobi.startLogin();
+      const result = await window.gu.startLogin();
       setLogin(result);
       setMessage('请在官方页面完成 Codex 登录。');
     } catch (error) {
@@ -128,7 +134,7 @@ export function SettingsModal({
     setBusy(true);
     setMessage('');
     try {
-      onRuntime(await window.noobi.logout());
+      onRuntime(await window.gu.logout());
       setLogin(null);
       setMessage('已退出 Codex 账户。');
     } catch (error) {
@@ -139,7 +145,7 @@ export function SettingsModal({
   }
 
   async function chooseDirectory() {
-    const directory = await window.noobi.chooseDirectory();
+    const directory = await window.gu.chooseDirectory();
     if (directory) setDraft((current) => ({ ...current, defaultWorkspace: directory }));
   }
 
@@ -147,7 +153,7 @@ export function SettingsModal({
     setBusy(true);
     setMessage('');
     try {
-      const saved = await window.noobi.saveSettings(draft);
+      const saved = await window.gu.saveSettings(draft);
       setDraft(saved);
       onSaved(saved);
       setMessage('设置已保存。');
@@ -158,18 +164,18 @@ export function SettingsModal({
     }
   }
 
-  function confirmPromptDiscard(): boolean {
-    return !promptDirty || window.confirm('提示词有未保存更改。离开此页面会放弃这些更改，是否继续？');
+  async function confirmPromptDiscard(): Promise<boolean> {
+    return !promptDirty || await confirm('提示词有未保存更改。离开此页面会放弃这些更改，是否继续？');
   }
 
-  function closeSettings() {
-    if (promptBusy || !confirmPromptDiscard()) return;
+  async function closeSettings() {
+    if (promptBusy || speechBusy || !(await confirmPromptDiscard())) return;
     setPromptDirty(false);
     onClose();
   }
 
-  function selectSection(next: SettingsSection) {
-    if (next === section || promptBusy || !confirmPromptDiscard()) return;
+  async function selectSection(next: SettingsSection) {
+    if (next === section || promptBusy || speechBusy || !(await confirmPromptDiscard())) return;
     setPromptDirty(false);
     setSection(next);
     setMessage('');
@@ -181,11 +187,11 @@ export function SettingsModal({
       title="设置"
       description="配置 Agent 运行时、媒体服务、扩展能力和制作规范。"
       className="settings-modal"
-      onClose={busy || promptBusy ? undefined : closeSettings}
+      onClose={busy || promptBusy || speechBusy ? undefined : closeSettings}
       footer={
         <>
           <span className="settings-feedback" role="status">{message}</span>
-          {section === 'defaults' || section === 'noobi' || section === 'appearance' ? (
+          {section === 'defaults' || section === 'gu' ? (
             <button className="primary-button" type="button" disabled={busy} onClick={() => void save()}>
               <Save size={15} /> {busy ? '保存中…' : '保存设置'}
             </button>
@@ -203,7 +209,7 @@ export function SettingsModal({
                 key={item.id}
                 className={section === item.id ? 'is-active' : ''}
                 aria-current={section === item.id ? 'page' : undefined}
-                disabled={promptBusy}
+                disabled={promptBusy || speechBusy}
                 onClick={() => selectSection(item.id)}
               >
                 <Icon size={16} />
@@ -231,6 +237,8 @@ export function SettingsModal({
           {section === 'environment' ? <EnvironmentSettings onMessage={setMessage} /> : null}
 
           {section === 'media' ? <MediaApiSettings controller={extensions} /> : null}
+
+          {section === 'speech' ? <SpeechSettings onBusyChange={setSpeechBusy} /> : null}
 
           {section === 'defaults' ? (
             <section>
@@ -286,104 +294,104 @@ export function SettingsModal({
             </section>
           ) : null}
 
-          {section === 'noobi' ? (
+          {section === 'gu' ? (
             <section>
               <SettingsHeading
-                eyebrow="NOOBI WORKSHOP"
+                eyebrow="GAME//OS STUDIO"
                 title="选择默认搭档与工作场景"
-                description="默认先由一位 Noobi 在一个单人工作室中陪你制作；多人编队与多人场景放在下方，按需启用。"
+                description="选择游侠装备与控制台场景，也可以组建多人编队。"
               />
 
               <section
-                className={`noobi-mode-panel noobi-solo-panel${noobiStageMode === 'solo' ? ' is-active' : ''}`}
+                className={`gu-mode-panel gu-solo-panel${guStageMode === 'solo' ? ' is-active' : ''}`}
                 aria-label="默认单人搭档与工作室"
               >
-                <header className="noobi-mode-panel-heading">
+                <header className="gu-mode-panel-heading">
                   <div>
                     <small>SOLO / DEFAULT</small>
                     <strong>一位搭档，一个工作室</strong>
                     <p>角色和场景分别选择，可以自由组合；选择任一项都会把单人模式设为默认。</p>
                   </div>
-                  <span className="noobi-mode-state">
-                    {noobiStageMode === 'solo' ? '当前默认' : '点击选项启用'}
+                  <span className="gu-mode-state">
+                    {guStageMode === 'solo' ? '当前默认' : '点击选项启用'}
                   </span>
                 </header>
 
-                <section className="noobi-setup-step" aria-labelledby="noobi-character-step-title">
-                  <header className="noobi-setup-step-heading">
+                <section className="gu-setup-step" aria-labelledby="gu-character-step-title">
+                  <header className="gu-setup-step-heading">
                     <span aria-hidden="true">01</span>
                     <div>
                       <small>SOLO PARTNER</small>
-                      <strong id="noobi-character-step-title">先选择一位默认角色</strong>
-                      <p>这位 Noobi 会独自出现在制作预览里，并跟随 Agent 的阶段行动。</p>
+                      <strong id="gu-character-step-title">先选择一位默认角色</strong>
+                      <p>游侠会在制作台中随任务阶段行动。</p>
                     </div>
                   </header>
-                  <NoobiPackPicker
-                    value={draft.defaultNoobiPackId ?? DEFAULT_NOOBI_PACK_ID}
+                  <GuPackPicker
+                    value={draft.defaultGuPackId ?? DEFAULT_GU_PACK_ID}
                     mode="global"
                     presentation="character"
                     busy={busy}
-                    onChange={(defaultNoobiPackId) => {
-                      if (!defaultNoobiPackId) return;
+                    onChange={(defaultGuPackId) => {
+                      if (!defaultGuPackId) return;
                       setDraft((current) => ({
                         ...current,
-                        defaultNoobiPackId,
-                        defaultNoobiStageMode: 'solo',
+                        defaultGuPackId,
+                        defaultGuStageMode: 'solo',
                       }));
                     }}
                   />
                 </section>
 
-                <NoobiSoloScenePicker
-                  value={draft.defaultNoobiSoloSceneId ?? DEFAULT_NOOBI_SOLO_SCENE_ID}
+                <GuSoloScenePicker
+                  value={draft.defaultGuSoloSceneId ?? DEFAULT_GU_SOLO_SCENE_ID}
                   busy={busy}
-                  onChange={(defaultNoobiSoloSceneId) => {
+                  onChange={(defaultGuSoloSceneId) => {
                     setDraft((current) => ({
                       ...current,
-                      defaultNoobiSoloSceneId,
-                      defaultNoobiStageMode: 'solo',
+                      defaultGuSoloSceneId,
+                      defaultGuStageMode: 'solo',
                     }));
                   }}
                 />
               </section>
 
               <section
-                className={`noobi-mode-panel noobi-multiplayer-panel${noobiStageMode === 'crew' ? ' is-active' : ''}`}
+                className={`gu-mode-panel gu-multiplayer-panel${guStageMode === 'crew' ? ' is-active' : ''}`}
                 aria-label="多人协作与多人场景"
               >
-                <header className="noobi-mode-panel-heading">
+                <header className="gu-mode-panel-heading">
                   <div>
                     <small>MULTIPLAYER / OPTIONAL</small>
                     <strong>需要时，再组建多人编队</strong>
                     <p>先配置 2–4 位伙伴的岗位，再在最下方选择一个多人舞台。</p>
                   </div>
-                  <span className="noobi-mode-state">
-                    {noobiStageMode === 'crew' ? '当前默认' : '可选模式'}
+                  <span className="gu-mode-state">
+                    {guStageMode === 'crew' ? '当前默认' : '可选模式'}
                   </span>
                 </header>
 
-                <NoobiCrewPicker
-                  value={draft.defaultNoobiCrew ?? DEFAULT_NOOBI_CREW}
+                <GuCrewPicker
+                  value={draft.defaultGuCrew ?? DEFAULT_GU_CREW}
                   busy={busy}
-                  onChange={(defaultNoobiCrew) => {
-                    setDraft((current) => ({ ...current, defaultNoobiCrew }));
+                  onChange={(defaultGuCrew) => {
+                    setDraft((current) => ({ ...current, defaultGuCrew }));
                   }}
                 />
-                <NoobiScenePicker
-                  value={noobiStageMode === 'crew'
-                    ? draft.defaultNoobiSceneId ?? DEFAULT_NOOBI_SCENE_ID
+                <GuScenePicker
+                  value={guStageMode === 'crew'
+                    ? draft.defaultGuSceneId ?? DEFAULT_GU_SCENE_ID
                     : null}
                   busy={busy}
-                  onChange={(defaultNoobiSceneId) => {
+                  onChange={(defaultGuSceneId) => {
                     setDraft((current) => ({
                       ...current,
-                      defaultNoobiSceneId,
-                      defaultNoobiStageMode: 'crew',
+                      defaultGuSceneId,
+                      defaultGuStageMode: 'crew',
                     }));
                   }}
                 />
-                <p className="noobi-pack-settings-note">
-                  只有选择多人舞台后，制作预览才会切换为编队模式。协作工坊按岗位渲染当前编队；荷塘钓鱼保留固定四人的完整动态演出。
+                <p className="gu-pack-settings-note">
+                  选择多人场景后启用编队；指挥站和天台均显示你配置的伙伴。
                 </p>
               </section>
             </section>
@@ -403,31 +411,12 @@ export function SettingsModal({
 
           {section === 'appearance' ? (
             <section>
-              <SettingsHeading
-                eyebrow="APPEARANCE"
-                title="界面主题"
-                description="功能颜色在两种主题下保持一致，颜色只用来表达状态。"
-              />
-              <div className="theme-choices" role="radiogroup" aria-label="界面主题">
-                {(['dark', 'light'] as const).map((theme) => (
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={draft.theme === theme}
-                    className={draft.theme === theme ? 'is-active' : ''}
-                    key={theme}
-                    onClick={() => setDraft((current) => ({ ...current, theme }))}
-                  >
-                    <span className={`theme-swatch theme-${theme}`} aria-hidden="true">
-                      <i /><i /><i />
-                    </span>
-                    <span>
-                      <strong>{theme === 'dark' ? '深色' : '浅色'}</strong>
-                      <small>{theme === 'dark' ? '适合长时间制作' : '适合明亮工作环境'}</small>
-                    </span>
-                    {draft.theme === theme ? <CheckCircle2 size={16} /> : null}
-                  </button>
-                ))}
+              <SettingsHeading eyebrow="APPEARANCE" title="赛博像素桌面"
+                description="主桌面、制作窗口与所有应用弹窗使用同一套像素主题。" />
+              <div className="pixel-theme-preview">
+                <span aria-hidden="true"><i /><i /><i /></span>
+                <div><strong>GAME//OS</strong><p>深紫底色 · 青色操作 · 洋红强调</p></div>
+                <CheckCircle2 size={20} aria-label="当前主题" />
               </div>
             </section>
           ) : null}
@@ -457,7 +446,7 @@ function AccountSettings({
       <SettingsHeading
         eyebrow="CODEX APP SERVER"
         title="运行时与账户"
-        description="Noobi 通过官方 App Server 使用 Codex；认证在系统浏览器中完成。"
+        description="GU 通过官方 App Server 使用 Codex；认证在系统浏览器中完成。"
         action={
           <button className="secondary-button compact" type="button" disabled={busy} onClick={onRefresh}>
             <RefreshCw size={13} className={busy ? 'spin' : ''} /> 刷新

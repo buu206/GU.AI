@@ -1,3 +1,6 @@
+import type { CreationBrief, CreationPlanInput } from './creationBrief.js';
+import type { SaveSpeechSettingsInput, SpeechSettings, SpeechTranscript, TranscribeSpeechInput } from './speech.js';
+
 export type PipelineStage =
   | 'brief'
   | 'scaffold'
@@ -24,37 +27,37 @@ export const GAME_ENGINES = ['web', 'godot'] as const;
 export type GameEngine = (typeof GAME_ENGINES)[number];
 export const DEFAULT_GAME_ENGINE: GameEngine = 'web';
 
-export const NOOBI_SCENE_IDS = ['collaboration', 'fishing'] as const;
-export type NoobiSceneId = (typeof NOOBI_SCENE_IDS)[number];
-export const DEFAULT_NOOBI_SCENE_ID: NoobiSceneId = 'collaboration';
+export const GU_SCENE_IDS = ['collaboration', 'fishing'] as const;
+export type GuSceneId = (typeof GU_SCENE_IDS)[number];
+export const DEFAULT_GU_SCENE_ID: GuSceneId = 'collaboration';
 
-export const NOOBI_STAGE_MODES = ['solo', 'crew'] as const;
-export type NoobiStageMode = (typeof NOOBI_STAGE_MODES)[number];
-export const DEFAULT_NOOBI_STAGE_MODE: NoobiStageMode = 'solo';
+export const GU_STAGE_MODES = ['solo', 'crew'] as const;
+export type GuStageMode = (typeof GU_STAGE_MODES)[number];
+export const DEFAULT_GU_STAGE_MODE: GuStageMode = 'solo';
 
-export const NOOBI_PACK_IDS = [
+export const GU_PACK_IDS = [
   'classic',
   'mosslight',
   'starforge',
   'twilight',
   'hellokitty',
 ] as const;
-export type NoobiPackId = (typeof NOOBI_PACK_IDS)[number];
-export const DEFAULT_NOOBI_PACK_ID: NoobiPackId = 'classic';
-export const DEFAULT_NOOBI_SOLO_SCENE_ID: NoobiPackId = 'classic';
+export type GuPackId = (typeof GU_PACK_IDS)[number];
+export const DEFAULT_GU_PACK_ID: GuPackId = 'classic';
+export const DEFAULT_GU_SOLO_SCENE_ID: GuPackId = 'classic';
 
-export const NOOBI_CREW_ROLES = ['planner', 'artist', 'engineer', 'tester'] as const;
-export type NoobiCrewRole = (typeof NOOBI_CREW_ROLES)[number];
-export const NOOBI_CREW_MIN_SIZE = 2;
-export const NOOBI_CREW_MAX_SIZE = 4;
+export const GU_CREW_ROLES = ['planner', 'artist', 'engineer', 'tester'] as const;
+export type GuCrewRole = (typeof GU_CREW_ROLES)[number];
+export const GU_CREW_MIN_SIZE = 2;
+export const GU_CREW_MAX_SIZE = 4;
 
 /** Persisted crew identity. Visual assets are resolved from packId at render time. */
-export interface NoobiCrewMember {
-  packId: NoobiPackId;
-  role: NoobiCrewRole;
+export interface GuCrewMember {
+  packId: GuPackId;
+  role: GuCrewRole;
 }
 
-export const DEFAULT_NOOBI_CREW: readonly NoobiCrewMember[] = [
+export const DEFAULT_GU_CREW: readonly GuCrewMember[] = [
   { packId: 'classic', role: 'planner' },
   { packId: 'twilight', role: 'artist' },
   { packId: 'hellokitty', role: 'engineer' },
@@ -65,34 +68,34 @@ export function isGameEngine(value: unknown): value is GameEngine {
   return typeof value === 'string' && GAME_ENGINES.some((engine) => engine === value);
 }
 
-export function isNoobiSceneId(value: unknown): value is NoobiSceneId {
-  return typeof value === 'string' && NOOBI_SCENE_IDS.some((sceneId) => sceneId === value);
+export function isGuSceneId(value: unknown): value is GuSceneId {
+  return typeof value === 'string' && GU_SCENE_IDS.some((sceneId) => sceneId === value);
 }
 
-export function isNoobiStageMode(value: unknown): value is NoobiStageMode {
-  return typeof value === 'string' && NOOBI_STAGE_MODES.some((mode) => mode === value);
+export function isGuStageMode(value: unknown): value is GuStageMode {
+  return typeof value === 'string' && GU_STAGE_MODES.some((mode) => mode === value);
 }
 
-export function isNoobiPackId(value: unknown): value is NoobiPackId {
-  return typeof value === 'string' && NOOBI_PACK_IDS.some((packId) => packId === value);
+export function isGuPackId(value: unknown): value is GuPackId {
+  return typeof value === 'string' && GU_PACK_IDS.some((packId) => packId === value);
 }
 
-export function isNoobiCrewRole(value: unknown): value is NoobiCrewRole {
-  return typeof value === 'string' && NOOBI_CREW_ROLES.some((role) => role === value);
+export function isGuCrewRole(value: unknown): value is GuCrewRole {
+  return typeof value === 'string' && GU_CREW_ROLES.some((role) => role === value);
 }
 
-export function isNoobiCrew(value: unknown): value is NoobiCrewMember[] {
+export function isGuCrew(value: unknown): value is GuCrewMember[] {
   if (!Array.isArray(value)
-    || value.length < NOOBI_CREW_MIN_SIZE
-    || value.length > NOOBI_CREW_MAX_SIZE) return false;
-  const packIds = new Set<NoobiPackId>();
-  const roles = new Set<NoobiCrewRole>();
+    || value.length < GU_CREW_MIN_SIZE
+    || value.length > GU_CREW_MAX_SIZE) return false;
+  const packIds = new Set<GuPackId>();
+  const roles = new Set<GuCrewRole>();
   for (const candidate of value) {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
     const member = candidate as Record<string, unknown>;
     if (Object.keys(member).some((key) => key !== 'packId' && key !== 'role')
-      || !isNoobiPackId(member.packId)
-      || !isNoobiCrewRole(member.role)
+      || !isGuPackId(member.packId)
+      || !isGuCrewRole(member.role)
       || packIds.has(member.packId)
       || roles.has(member.role)) return false;
     packIds.add(member.packId);
@@ -109,7 +112,7 @@ export function isTargetFrameRate(value: unknown): value is TargetFrameRate {
 export type ProjectIconSource = 'procedural' | 'ai';
 
 export interface ProjectIcon {
-  /** Icon PNG path relative to the project root (host-owned, e.g. `.noobi/icon.png`). */
+  /** Icon PNG path relative to the project root (host-owned, e.g. `.gu/icon.png`). */
   path: string;
   source: ProjectIconSource;
   updatedAt: string;
@@ -136,9 +139,9 @@ export interface ProjectRecord {
   /** Host-selected simulation/presentation target for generated game code and animation variants. */
   targetFrameRate: TargetFrameRate;
   /** Null follows the app-wide default; otherwise this project keeps its own production-studio pack. */
-  noobiPackOverrideId: NoobiPackId | null;
+  guPackOverrideId: GuPackId | null;
   /** Null follows the app-wide crew. Members persist identity and role only. */
-  noobiCrewOverride: NoobiCrewMember[] | null;
+  guCrewOverride: GuCrewMember[] | null;
   model: string | null;
   threadId: string | null;
   /** Version of the host dynamic-tool contract persisted on threadId. */
@@ -212,11 +215,11 @@ export interface AppSettings {
   defaultWorkspace: string;
   defaultModel: string | null;
   defaultEffort: string;
-  defaultNoobiStageMode: NoobiStageMode;
-  defaultNoobiSoloSceneId: NoobiPackId;
-  defaultNoobiSceneId: NoobiSceneId;
-  defaultNoobiPackId: NoobiPackId;
-  defaultNoobiCrew: NoobiCrewMember[];
+  defaultGuStageMode: GuStageMode;
+  defaultGuSoloSceneId: GuPackId;
+  defaultGuSceneId: GuSceneId;
+  defaultGuPackId: GuPackId;
+  defaultGuCrew: GuCrewMember[];
   theme: 'dark' | 'light';
 }
 
@@ -277,6 +280,14 @@ export interface CreateProjectInput {
   idea: string;
   projectDirectory: string;
   model?: string | null;
+}
+
+/** Local-only creation after the user reviews an editable brief; never starts a model run. */
+export interface CreateDraftProjectInput {
+  brief: CreationBrief;
+  projectDirectory: string;
+  model?: string | null;
+  requestId?: string;
 }
 
 /** Main-only store input. Renderer creation requests never choose the engine or a parent directory. */
@@ -543,7 +554,13 @@ export interface LoginStartResult {
   userCode?: string;
 }
 
-export interface NoobiApi {
+export interface ProjectReadiness {
+  ready: boolean;
+  issues: Array<{ message: string; action: 'account' | 'media' | 'environment' | 'locate' | 'wait' }>;
+}
+
+export interface GuApi {
+  getProjectReadiness(projectId: string, model: string | null): Promise<ProjectReadiness>;
   bootstrap(): Promise<BootstrapPayload>;
   refreshRuntime(): Promise<RuntimeStatus>;
   startLogin(): Promise<LoginStartResult>;
@@ -552,6 +569,14 @@ export interface NoobiApi {
   chooseProjectDirectory(): Promise<string | null>;
   /** Files stay opaque in Renderer; Preload resolves their native paths for Main. */
   createProject(input: CreateProjectInput, files?: readonly unknown[]): Promise<ProjectRecord>;
+  createDraftProject(input: CreateDraftProjectInput): Promise<ProjectRecord>;
+  planCreationBrief(input: CreationPlanInput): Promise<CreationBrief>;
+  cancelCreationBrief(requestId: string): Promise<void>;
+  getSpeechSettings(): Promise<SpeechSettings>;
+  saveSpeechSettings(input: SaveSpeechSettingsInput): Promise<SpeechSettings>;
+  requestMicrophoneAccess(): Promise<boolean>;
+  transcribeSpeech(input: TranscribeSpeechInput): Promise<SpeechTranscript>;
+  cancelSpeechTranscription(requestId: string): Promise<void>;
   renameProject(projectId: string, name: string): Promise<ProjectRecord>;
   setProjectPinned(projectId: string, pinned: boolean): Promise<ProjectRecord>;
   /** Permanently removes the catalog record and its verified workspace directory. */
@@ -573,12 +598,12 @@ export interface NoobiApi {
   readProjectFile(projectId: string, relativePath: string): Promise<FileReadResult>;
   /** Returns the project icon as a PNG data URL, or null when no icon exists yet. */
   getProjectIcon(projectId: string): Promise<ProjectIconData | null>;
-  /** Pass null to make the project follow the app-wide Noobi production pack again. */
-  saveProjectNoobiPack(projectId: string, packId: NoobiPackId | null): Promise<ProjectRecord>;
-  /** Pass null to make the project follow the app-wide Noobi crew again. */
-  saveProjectNoobiCrew(
+  /** Pass null to make the project follow the app-wide GU production pack again. */
+  saveProjectGuPack(projectId: string, packId: GuPackId | null): Promise<ProjectRecord>;
+  /** Pass null to make the project follow the app-wide GU crew again. */
+  saveProjectGuCrew(
     projectId: string,
-    crew: readonly NoobiCrewMember[] | null,
+    crew: readonly GuCrewMember[] | null,
   ): Promise<ProjectRecord>;
   saveSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   getEnvironmentStatus(): Promise<EnvironmentStatusSnapshot>;

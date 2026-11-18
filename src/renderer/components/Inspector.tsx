@@ -1,3 +1,4 @@
+import { CYBER_AVATARS, CYBER_SCENES } from '../cyberArtAssets';
 import {
   AlertTriangle,
   Box,
@@ -38,24 +39,24 @@ import type {
   GameplayExperienceCheck,
   GameplayExperienceReport,
   PipelineStage,
-  NoobiCrewMember,
+  GuCrewMember,
   ProjectInspectorPayload,
   ProjectRecord,
   ProjectStatus,
 } from '../../shared/contracts';
 import {
-  DEFAULT_NOOBI_CREW,
-  DEFAULT_NOOBI_SCENE_ID,
-  DEFAULT_NOOBI_SOLO_SCENE_ID,
-  DEFAULT_NOOBI_STAGE_MODE,
+  DEFAULT_GU_CREW,
+  DEFAULT_GU_SCENE_ID,
+  DEFAULT_GU_SOLO_SCENE_ID,
+  DEFAULT_GU_STAGE_MODE,
 } from '../../shared/contracts';
 import { toMessage } from '../ui';
 import { ProductionDiorama } from './ProductionDiorama';
 import {
-  NoobiCrewPicker,
-  NOOBI_CREW_ROLE_OPTIONS,
-} from './NoobiCrewPicker';
-import { NOOBI_PACK_OPTIONS } from './NoobiPackPicker';
+  GuCrewPicker,
+  GU_CREW_ROLE_OPTIONS,
+} from './GuCrewPicker';
+import { GU_PACK_OPTIONS } from './GuPackPicker';
 
 interface InspectorProps {
   project: ProjectRecord;
@@ -123,20 +124,20 @@ export function Inspector({
   );
   const showProductionScene = !payload.previewUrl
     || (project.status === 'running' && !showBuildPreview);
-  const resolvedNoobiPackId = project.noobiPackOverrideId
-    ?? settings.defaultNoobiPackId
+  const resolvedGuPackId = project.guPackOverrideId
+    ?? settings.defaultGuPackId
     ?? 'classic';
-  const globalNoobiCrew = settings.defaultNoobiCrew ?? DEFAULT_NOOBI_CREW;
-  const resolvedNoobiCrew = project.noobiCrewOverride ?? globalNoobiCrew;
-  const resolvedNoobiStageMode = settings.defaultNoobiStageMode ?? DEFAULT_NOOBI_STAGE_MODE;
-  const resolvedNoobiSoloSceneId = settings.defaultNoobiSoloSceneId ?? DEFAULT_NOOBI_SOLO_SCENE_ID;
-  const resolvedNoobiSceneId = settings.defaultNoobiSceneId ?? DEFAULT_NOOBI_SCENE_ID;
-  const resolvedNoobiPack = NOOBI_PACK_OPTIONS.find((option) => option.id === resolvedNoobiPackId);
+  const globalGuCrew = settings.defaultGuCrew ?? DEFAULT_GU_CREW;
+  const resolvedGuCrew = project.guCrewOverride ?? globalGuCrew;
+  const resolvedGuStageMode = settings.defaultGuStageMode ?? DEFAULT_GU_STAGE_MODE;
+  const resolvedGuSoloSceneId = settings.defaultGuSoloSceneId ?? DEFAULT_GU_SOLO_SCENE_ID;
+  const resolvedGuSceneId = settings.defaultGuSceneId ?? DEFAULT_GU_SCENE_ID;
+  const resolvedGuPack = GU_PACK_OPTIONS.find((option) => option.id === resolvedGuPackId);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setPayload(await window.noobi.inspectProject(project.id));
+      setPayload(await window.gu.inspectProject(project.id));
       setPreviewRevision((value) => value + 1);
     } catch (error) {
       onError(toMessage(error));
@@ -181,7 +182,7 @@ export function Inspector({
 
   useEffect(
     () =>
-      window.noobi.onAssetsChanged(({ projectId, assets }) => {
+      window.gu.onAssetsChanged(({ projectId, assets }) => {
         if (projectId !== project.id) return;
         setPayload((current) => ({ ...current, assets }));
         // Asset events do not carry the host-owned generation gate. Reinspect so
@@ -193,7 +194,7 @@ export function Inspector({
 
   useEffect(
     () =>
-      window.noobi.onAssetPlansChanged(({ projectId, assetPlans }) => {
+      window.gu.onAssetPlansChanged(({ projectId, assetPlans }) => {
         if (projectId !== project.id) return;
         setPayload((current) => ({ ...current, assetPlans }));
       }),
@@ -209,11 +210,11 @@ export function Inspector({
     }
   }
 
-  async function selectNoobiCrew(noobiCrewOverride: readonly NoobiCrewMember[] | null) {
+  async function selectGuCrew(guCrewOverride: readonly GuCrewMember[] | null) {
     if (project.status === 'running' || crewSaving) return;
     setCrewSaving(true);
     try {
-      onProjectUpdated(await window.noobi.saveProjectNoobiCrew(project.id, noobiCrewOverride));
+      onProjectUpdated(await window.gu.saveProjectGuCrew(project.id, guCrewOverride));
     } catch (error) {
       onError(toMessage(error));
     } finally {
@@ -224,7 +225,7 @@ export function Inspector({
   async function openFile(relativePath: string) {
     try {
       setSelectedFile(
-        await window.noobi.readProjectFile(project.id, relativePath),
+        await window.gu.readProjectFile(project.id, relativePath),
       );
     } catch (error) {
       onError(toMessage(error));
@@ -235,7 +236,7 @@ export function Inspector({
     setAssetNotice(null);
     setImporting(true);
     try {
-      const assets = await window.noobi.importProjectAssets(project.id);
+      const assets = await window.gu.importProjectAssets(project.id);
       setPayload((current) => ({ ...current, assets }));
     } catch (error) {
       onError(toMessage(error));
@@ -248,7 +249,7 @@ export function Inspector({
     experienceCancelRequested.current = false;
     setEvaluatingExperience(true);
     try {
-      const experienceReport = await window.noobi.evaluateProjectExperience(project.id);
+      const experienceReport = await window.gu.evaluateProjectExperience(project.id);
       setPayload((current) => ({ ...current, experienceReport }));
       setPreviewRevision((value) => value + 1);
     } catch (error) {
@@ -262,7 +263,7 @@ export function Inspector({
   async function cancelExperience() {
     experienceCancelRequested.current = true;
     try {
-      await window.noobi.cancelProjectExperience(project.id);
+      await window.gu.cancelProjectExperience(project.id);
     } catch (error) {
       experienceCancelRequested.current = false;
       onError(toMessage(error));
@@ -285,7 +286,7 @@ export function Inspector({
     const ignoredCount = files.length - images.length;
     setImporting(true);
     try {
-      const assets = await window.noobi.importDroppedProjectAssets(project.id, images);
+      const assets = await window.gu.importDroppedProjectAssets(project.id, images);
       setPayload((current) => ({ ...current, assets }));
       setTab('assets');
       setAssetNotice({
@@ -372,7 +373,7 @@ export function Inspector({
       <div className="inspector-toolbar">
         <span>
           {tab === 'preview'
-            ? showProductionScene ? 'NOOBI PRODUCTION STUDIO' : 'LOCAL GAME PREVIEW'
+            ? project.status === 'draft' ? 'GAME//OS · 等待制作' : showProductionScene ? 'GAME//OS · 制作中' : 'GAME//OS · 游戏预览'
             : tab === 'assets'
               ? 'GAME ASSET LIBRARY'
               : 'PROJECT FILES'}
@@ -388,20 +389,20 @@ export function Inspector({
             />
           ) : null}
           {tab === 'preview' ? (
-            resolvedNoobiStageMode === 'crew' ? (
+            resolvedGuStageMode === 'crew' ? (
               <button
                 className="inspector-crew-toggle"
                 type="button"
                 ref={crewToggleRef}
                 aria-expanded={crewEditorOpen}
-                aria-controls="project-noobi-crew-editor"
-                title="编辑项目 Noobi 制作编队"
+                aria-controls="project-gu-crew-editor"
+                title="编辑项目 GU 制作编队"
                 onClick={() => setCrewEditorOpen((open) => !open)}
               >
                 <Users size={13} aria-hidden="true" />
                 <span className="inspector-crew-avatars" aria-hidden="true">
-                  {resolvedNoobiCrew.map((member) => {
-                    const pack = NOOBI_PACK_OPTIONS.find((option) => option.id === member.packId);
+                  {resolvedGuCrew.map((member) => {
+                    const pack = GU_PACK_OPTIONS.find((option) => option.id === member.packId);
                     return pack ? (
                       <i data-role={member.role} key={member.packId}>
                         <img src={pack.avatarImage} alt="" draggable={false} />
@@ -409,11 +410,11 @@ export function Inspector({
                     ) : null;
                   })}
                 </span>
-                <strong>{resolvedNoobiCrew.length}人</strong>
+                <strong>{resolvedGuCrew.length}人</strong>
               </button>
             ) : (
-              <div className="inspector-solo-indicator" aria-label={`单人搭档：${resolvedNoobiPack?.avatarLabel ?? 'Noobi'}`}>
-                {resolvedNoobiPack ? <img src={resolvedNoobiPack.avatarImage} alt="" draggable={false} /> : null}
+              <div className="inspector-solo-indicator" aria-label={`单人搭档：${resolvedGuPack?.avatarLabel ?? 'GU'}`}>
+                {resolvedGuPack ? <img src={resolvedGuPack.avatarImage} alt="" draggable={false} /> : null}
                 <span>
                   <small>SOLO</small>
                   <strong>单人</strong>
@@ -467,11 +468,11 @@ export function Inspector({
         </div>
       </div>
 
-      {tab === 'preview' && resolvedNoobiStageMode === 'crew' && crewEditorOpen ? (
+      {tab === 'preview' && resolvedGuStageMode === 'crew' && crewEditorOpen ? (
         <aside
           className="inspector-crew-panel"
-          id="project-noobi-crew-editor"
-          aria-label="项目 Noobi 制作编队"
+          id="project-gu-crew-editor"
+          aria-label="项目 GU 制作编队"
           onKeyDown={(event) => {
             if (event.key !== 'Escape') return;
             event.stopPropagation();
@@ -483,15 +484,15 @@ export function Inspector({
             <div>
               <small>PROJECT CREW</small>
               <strong>项目制作编队</strong>
-              <span>{project.noobiCrewOverride === null ? '当前跟随全局默认编队' : '当前使用项目专属编队'}</span>
+              <span>{project.guCrewOverride === null ? '当前跟随全局默认编队' : '当前使用项目专属编队'}</span>
             </div>
             <div>
               <button
                 className="crew-inherit-button"
                 type="button"
-                aria-pressed={project.noobiCrewOverride === null}
-                disabled={project.status === 'running' || crewSaving || project.noobiCrewOverride === null}
-                onClick={() => void selectNoobiCrew(null)}
+                aria-pressed={project.guCrewOverride === null}
+                disabled={project.status === 'running' || crewSaving || project.guCrewOverride === null}
+                onClick={() => void selectGuCrew(null)}
               >
                 跟随全局
               </button>
@@ -505,21 +506,21 @@ export function Inspector({
               </button>
             </div>
           </header>
-          <NoobiCrewPicker
-            value={resolvedNoobiCrew}
+          <GuCrewPicker
+            value={resolvedGuCrew}
             disabled={project.status === 'running'}
             busy={crewSaving}
-            label="项目 Noobi 制作编队"
-            onChange={(crew) => void selectNoobiCrew(crew)}
+            label="项目 GU 制作编队"
+            onChange={(crew) => void selectGuCrew(crew)}
           />
           <footer>
             {project.status === 'running'
               ? 'Agent 工作期间编队已锁定；停止本轮后可以调整。'
-              : project.noobiCrewOverride === null
+              : project.guCrewOverride === null
                 ? '修改任意角色或岗位后，会自动建立项目专属编队。'
-                : `${resolvedNoobiCrew.map((member) => {
-                    const role = NOOBI_CREW_ROLE_OPTIONS.find((item) => item.id === member.role);
-                    const pack = NOOBI_PACK_OPTIONS.find((item) => item.id === member.packId);
+                : `${resolvedGuCrew.map((member) => {
+                    const role = GU_CREW_ROLE_OPTIONS.find((item) => item.id === member.role);
+                    const pack = GU_PACK_OPTIONS.find((item) => item.id === member.packId);
                     return `${role?.label ?? member.role} · ${pack?.avatarLabel ?? member.packId}`;
                   }).join('　')}`}
           </footer>
@@ -538,21 +539,33 @@ export function Inspector({
 
       {tab === 'preview' ? (
         <div className="preview-pane">
-          {!showProductionScene && payload.previewUrl ? (
+          {project.status === 'draft' ? (
+            <div className="production-standby">
+              <img className="production-standby-scene" src={CYBER_SCENES.classic} alt="" />
+              <div className="production-standby-content">
+                <img className="production-standby-avatar" src={CYBER_AVATARS.classic} alt="" />
+                <span>READY TO BUILD</span>
+                <h2>{project.name}</h2>
+                <p>创意已就位，等待开始制作</p>
+                <div className="production-standby-slots" aria-hidden="true">▰ ▱ ▱ ▱ ▱ ▱ ▱ ▱</div>
+                <small>在制作终端点击「开始生成」</small>
+              </div>
+            </div>
+          ) : !showProductionScene && payload.previewUrl ? (
             <iframe
               key={`${payload.previewUrl}:${previewRevision}`}
-              src={`${payload.previewUrl}?noobi=${previewRevision}`}
+              src={`${payload.previewUrl}?gu=${previewRevision}`}
               title={`${project.name} 游戏预览`}
               sandbox="allow-scripts allow-same-origin allow-pointer-lock"
             />
           ) : (
             <ProductionDiorama
-              key={`${resolvedNoobiStageMode}:${resolvedNoobiPackId}:${resolvedNoobiSoloSceneId}:${resolvedNoobiSceneId}`}
-              stageMode={resolvedNoobiStageMode}
-              packId={resolvedNoobiPackId}
-              crew={resolvedNoobiCrew}
-              sceneId={resolvedNoobiSceneId}
-              soloSceneId={resolvedNoobiSoloSceneId}
+              key={`${resolvedGuStageMode}:${resolvedGuPackId}:${resolvedGuSoloSceneId}:${resolvedGuSceneId}`}
+              stageMode={resolvedGuStageMode}
+              packId={resolvedGuPackId}
+              crew={resolvedGuCrew}
+              sceneId={resolvedGuSceneId}
+              soloSceneId={resolvedGuSoloSceneId}
               stage={activityStage}
               status={project.status}
             />
@@ -579,7 +592,7 @@ export function Inspector({
             >
               <FolderOpen size={13} /> 在 Finder 中显示
             </button>
-            {payload.previewUrl ? (
+            {payload.previewUrl && project.status !== 'draft' ? (
               <a href={payload.previewUrl} target="_blank" rel="noreferrer">
                 新窗口 <ExternalLink size={12} />
               </a>
@@ -984,7 +997,7 @@ function AssetStudio({
         : '宿主私有证明中没有可信生成图片；请检查图像 API 或 Codex ImageGen 后继续制作并重新验证。'
       : hasTrustedUnreferencedImage
         ? '宿主已验证图片来源，下一步需要让游戏生产代码真实加载并显示它。'
-        : 'Noobi 优先使用已配置图像 API，否则回退 Codex ImageGen；成功后会自动出现在这里。';
+        : 'GU 优先使用已配置图像 API，否则回退 Codex ImageGen；成功后会自动出现在这里。';
     return (
       <div className={`asset-empty requirement-imagegen${terminal ? ' is-error' : ''}`}>
         <ImageIcon size={28} />

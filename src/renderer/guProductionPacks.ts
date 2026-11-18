@@ -1,70 +1,54 @@
-import type { NoobiPackId } from '../shared/contracts';
-import classicScene from './assets/noobi-packs/classic/scene.png';
-import helloKittyScene from './assets/noobi-packs/hellokitty/scene.png';
-import mosslightScene from './assets/noobi-packs/mosslight/scene.png';
-import starforgeScene from './assets/noobi-packs/starforge/scene.png';
-import twilightScene from './assets/noobi-packs/twilight/scene.png';
+import type { GuPackId } from '../shared/contracts';
+import { GU_SCENE_IMAGES } from './guSceneAssets';
+import { cyberSpriteFrame } from './cyberArtAssets';
+import type { ProductionAssistantPose } from './productionAssistantState';
 import type {
-  NoobiAnimation,
-  NoobiAnimationFrame,
-  NoobiSpriteManifest,
-} from './noobiAnimation';
+  GuAnimation,
+  GuAnimationFrame,
+  GuSpriteManifest,
+} from './guAnimation';
 
-export interface NoobiProductionPack {
-  id: NoobiPackId;
+export interface GuProductionPack {
+  id: GuPackId;
   sceneImage: string;
-  spriteManifest: NoobiSpriteManifest;
-}
-
-const frameAssets = import.meta.glob(
-  [
-    './assets/noobi-packs/*/frames/sprite-*.png',
-    '!./assets/noobi-packs/*/frames/sprite-sheet-*.png',
-  ],
-  { eager: true, import: 'default', query: '?url' },
-) as Record<string, string>;
-
-function frameSource(packId: NoobiPackId, filename: string): string {
-  const key = `./assets/noobi-packs/${packId}/frames/${filename}`;
-  const source = frameAssets[key];
-  if (!source) throw new Error(`Missing Noobi animation frame: ${key}`);
-  return source;
+  spriteManifest: GuSpriteManifest;
 }
 
 function frames(
-  packId: NoobiPackId,
+  packId: GuPackId,
+  pose: ProductionAssistantPose,
   names: readonly string[],
   durations: readonly number[],
-): NoobiAnimationFrame[] {
+): GuAnimationFrame[] {
   return names.map((name, index) => ({
-    src: frameSource(packId, `sprite-${name}.png`),
+    src: cyberSpriteFrame(packId, pose, index),
     durationMs: durations[index] ?? durations.at(-1) ?? 160,
   }));
 }
 
 function clip(
-  packId: NoobiPackId,
-  id: string,
+  packId: GuPackId,
+  id: ProductionAssistantPose,
   names: readonly string[],
   durations: readonly number[],
   restFrame = 0,
-): NoobiAnimation {
+): GuAnimation {
   return {
     id: `${packId}-${id}`,
-    frames: frames(packId, names, durations),
+    frames: frames(packId, id, names, durations),
     loop: true,
     restFrame,
   };
 }
 
-function manifest(packId: NoobiPackId): NoobiSpriteManifest {
+function manifest(packId: GuPackId): GuSpriteManifest {
   return {
     schemaVersion: 1,
-    id: `${packId}-noobi-v2`,
+    id: `${packId}-gu-v2`,
     canvas: {
-      width: 252,
-      height: 336,
-      pivot: { x: 126, y: 320 },
+      width: 64,
+      height: 64,
+      pivot: { x: 32, y: 60 },
     },
     animations: {
       idle: clip(packId, 'idle',
@@ -119,34 +103,34 @@ function manifest(packId: NoobiPackId): NoobiSpriteManifest {
   };
 }
 
-export const NOOBI_PRODUCTION_PACKS: Readonly<Record<NoobiPackId, NoobiProductionPack>> = {
+export const GU_PRODUCTION_PACKS: Readonly<Record<GuPackId, GuProductionPack>> = {
   classic: {
     id: 'classic',
-    sceneImage: classicScene,
+    sceneImage: GU_SCENE_IMAGES.classic,
     spriteManifest: manifest('classic'),
   },
   mosslight: {
     id: 'mosslight',
-    sceneImage: mosslightScene,
+    sceneImage: GU_SCENE_IMAGES.mosslight,
     spriteManifest: manifest('mosslight'),
   },
   starforge: {
     id: 'starforge',
-    sceneImage: starforgeScene,
+    sceneImage: GU_SCENE_IMAGES.starforge,
     spriteManifest: manifest('starforge'),
   },
   twilight: {
     id: 'twilight',
-    sceneImage: twilightScene,
+    sceneImage: GU_SCENE_IMAGES.twilight,
     spriteManifest: manifest('twilight'),
   },
   hellokitty: {
     id: 'hellokitty',
-    sceneImage: helloKittyScene,
+    sceneImage: GU_SCENE_IMAGES.hellokitty,
     spriteManifest: manifest('hellokitty'),
   },
 };
 
-export function noobiProductionPack(packId: NoobiPackId): NoobiProductionPack {
-  return NOOBI_PRODUCTION_PACKS[packId];
+export function guProductionPack(packId: GuPackId): GuProductionPack {
+  return GU_PRODUCTION_PACKS[packId];
 }

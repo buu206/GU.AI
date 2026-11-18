@@ -5,7 +5,7 @@ import {
   type CSSProperties,
 } from 'react';
 
-import { noobiTransitionSceneForRun } from './noobiTransitionScenes';
+import { guTransitionSceneForRun } from './guTransitionScenes';
 
 export const PIXEL_TRANSITION_COLUMNS = 10;
 export const PIXEL_TRANSITION_ROWS = 7;
@@ -58,7 +58,7 @@ export function PixelPageTransition({
 }: PixelPageTransitionProps) {
   const completeRef = useRef(onComplete);
   const didCompleteRef = useRef(false);
-  const sceneGif = noobiTransitionSceneForRun(runId);
+  const sceneImage = guTransitionSceneForRun(runId);
   const duration = phase === 'covering'
     ? PIXEL_COVER_DURATION_MS
     : PIXEL_REVEAL_DURATION_MS;
@@ -114,7 +114,7 @@ export function PixelPageTransition({
       </div>
 
       <div className="pixel-transition-scene">
-        <img src={sceneGif} alt="" draggable={false} />
+        <img src={sceneImage} alt="" draggable={false} />
       </div>
     </div>
   );

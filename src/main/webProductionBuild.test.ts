@@ -44,18 +44,18 @@ describe('verifyWebProductionBuild', () => {
   });
 
   it('distinguishes a missing, empty, and index-less production build', async () => {
-    const missing = await temporaryRoot('noobi-web-missing-');
+    const missing = await temporaryRoot('gu-web-missing-');
     await expect(verifyWebProductionBuild(missing)).resolves.toMatchObject({
       ok: false,
       stale: false,
       reason: 'missing-dist',
     });
 
-    const empty = await temporaryRoot('noobi-web-empty-');
+    const empty = await temporaryRoot('gu-web-empty-');
     await mkdir(join(empty, 'dist'));
     await expect(verifyWebProductionBuild(empty)).resolves.toMatchObject({ reason: 'empty-dist' });
 
-    const indexless = await temporaryRoot('noobi-web-indexless-');
+    const indexless = await temporaryRoot('gu-web-indexless-');
     await mkdir(join(indexless, 'dist'));
     await writeFile(join(indexless, 'dist/app.js'), 'app');
     await expect(verifyWebProductionBuild(indexless)).resolves.toMatchObject({ reason: 'missing-index' });
@@ -233,7 +233,7 @@ describe('verifyWebProductionBuild', () => {
     await mkdir(join(root, 'src/node_modules/pkg'), { recursive: true });
     await writeFile(join(root, 'src/artifacts/new.txt'), 'ignored');
     await writeFile(join(root, 'src/node_modules/pkg/new.js'), 'ignored');
-    await symlink(join(root, 'outside-generated'), join(root, 'src/.noobi'));
+    await symlink(join(root, 'outside-generated'), join(root, 'src/.gu'));
     const inputNames = [
       'index.html',
       'package.json',
@@ -298,7 +298,7 @@ describe('verifyWebProductionBuild', () => {
 });
 
 async function fixture(): Promise<string> {
-  const root = await temporaryRoot('noobi-web-build-');
+  const root = await temporaryRoot('gu-web-build-');
   await mkdir(join(root, 'dist/assets'), { recursive: true });
   await mkdir(join(root, 'src'), { recursive: true });
   await mkdir(join(root, 'public'), { recursive: true });

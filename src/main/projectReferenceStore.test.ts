@@ -12,7 +12,7 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'noobi-reference-test-'));
+  const root = await mkdtemp(join(tmpdir(), 'gu-reference-test-'));
   roots.push(root);
   const project = join(root, 'project');
   const sources = join(root, 'sources');

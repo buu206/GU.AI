@@ -61,6 +61,10 @@ export function Composer({
   const [effort, setEffort] = useState(settings.defaultEffort);
   const [queuedRun, setQueuedRun] = useState<QueuedRun | null>(null);
   const queuedRunRef = useRef(false);
+  const submittingRef = useRef(false);
+  const composingRef = useRef(false);
+  const compositionEndedAt = useRef(-1000);
+  const [submitting, setSubmitting] = useState(false);
   const running = project.status === 'running';
   const resumable = Boolean(project.threadId) || project.status === 'stopped';
   const actionMode = composerActionMode(running, prompt, resumable);
@@ -116,7 +120,8 @@ export function Composer({
   }, [disabled, onRun, project.id, queuedRun, running]);
 
   async function submit() {
-    if (disabled || models.length === 0) return;
+    if (disabled || models.length === 0 || submittingRef.current || composingRef.current
+      || performance.now() - compositionEndedAt.current < 150) return;
     if (running) {
       const nextPrompt = prompt.trim();
       if (!nextPrompt) return;
@@ -133,8 +138,18 @@ export function Composer({
     }
     const nextPrompt = prompt.trim()
       || (project.status === 'draft' ? project.idea : '继续完成并验证当前游戏。');
-    await onRun(nextPrompt, activeModel?.model ?? null, effort || null);
-    setPrompt('');
+    const submittedDraft = prompt;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await onRun(nextPrompt, activeModel?.model ?? null, effort || null);
+      setPrompt((current) => current === submittedDraft ? '' : current);
+    } catch {
+      // The parent reports the failure. Keep the user's draft intact for retry.
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -169,14 +184,21 @@ export function Composer({
           onChange={(event) => {
             setPrompt(event.target.value);
           }}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={() => {
+            composingRef.current = false;
+            compositionEndedAt.current = performance.now();
+          }}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composingRef.current) return;
             if (
               (event.metaKey || event.ctrlKey) &&
               event.key === 'Enter' &&
+              !event.altKey &&
               !disabled
             ) {
               event.preventDefault();
-              void submit();
+              if (!event.repeat) void submit();
             }
           }}
         />
@@ -236,7 +258,7 @@ export function Composer({
                 type="button"
                 aria-label="继续制作"
                 title="继续制作"
-                disabled={disabled || models.length === 0}
+                disabled={disabled || submitting || models.length === 0}
                 onClick={() => void submit()}
               >
                 <Play size={13} fill="currentColor" />
@@ -247,7 +269,7 @@ export function Composer({
                 type="button"
                 aria-label="发送制作要求"
                 title="发送制作要求（⌘/Ctrl + Enter）"
-                disabled={disabled || models.length === 0}
+                disabled={disabled || submitting || models.length === 0}
                 onClick={() => void submit()}
               >
                 <ArrowUp size={17} strokeWidth={2.4} />

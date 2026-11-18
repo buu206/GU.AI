@@ -2,17 +2,17 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 import type {
-  NoobiCrewMember,
-  NoobiPackId,
-  NoobiSceneId,
-  NoobiStageMode,
+  GuCrewMember,
+  GuPackId,
+  GuSceneId,
+  GuStageMode,
   PipelineStage,
   ProjectStatus,
 } from '../../shared/contracts';
-import collaborationScene from '../assets/noobi-packs/collaboration/scene.png';
-import fishingScene from '../assets/noobi-packs/fishing/four-ip-fishing.gif';
-import type { NoobiSpriteManifest } from '../noobiAnimation';
-import { noobiProductionPack } from '../noobiProductionPacks';
+import { GU_SCENE_IMAGES } from '../guSceneAssets';
+import { CYBER_SCENES } from '../cyberArtAssets';
+import type { GuSpriteManifest } from '../guAnimation';
+import { guProductionPack } from '../guProductionPacks';
 import {
   WALK_ACTION,
   productionAssistantScene,
@@ -32,22 +32,19 @@ import {
   settleProductionAssistantAt,
   type ProductionAssistantMotionState,
 } from '../productionAssistantMotion';
-import {
-  productionDepthZ,
-  WORKSHOP_DEPTH_OBJECTS,
-} from '../productionMapNavigation';
-import { NoobiAnimatedSprite } from './NoobiAnimatedSprite';
+import { productionDepthZ } from '../productionMapNavigation';
+import { GuAnimatedSprite } from './GuAnimatedSprite';
 
 interface ProductionDioramaProps {
   stage: PipelineStage;
   status: ProjectStatus;
-  stageMode?: NoobiStageMode;
-  sceneId?: NoobiSceneId;
-  soloSceneId?: NoobiPackId;
-  packId?: NoobiPackId;
-  spriteManifest?: NoobiSpriteManifest;
+  stageMode?: GuStageMode;
+  sceneId?: GuSceneId;
+  soloSceneId?: GuPackId;
+  packId?: GuPackId;
+  spriteManifest?: GuSpriteManifest;
   crewSize?: ProductionCrewSize;
-  crew?: readonly NoobiCrewMember[];
+  crew?: readonly GuCrewMember[];
 }
 
 export function ProductionDiorama({
@@ -61,8 +58,8 @@ export function ProductionDiorama({
   crewSize = 4,
   crew: configuredCrew,
 }: ProductionDioramaProps) {
-  const productionPack = noobiProductionPack(packId);
-  const soloScenePack = noobiProductionPack(soloSceneId);
+  const productionPack = guProductionPack(packId);
+  const soloScenePack = guProductionPack(soloSceneId);
   const activeSpriteManifest = spriteManifest ?? productionPack.spriteManifest;
   const scene = useMemo(() => productionAssistantScene(stage, status), [stage, status]);
   const collaborativeRuntime = stageMode === 'crew';
@@ -73,10 +70,11 @@ export function ProductionDiorama({
     [runtimeConfiguredCrew, runtimeCrewSize, stage, status],
   );
   const activeMember = crew.find((member) => member.active) ?? crew[0]!;
-  const bakedRuntimeScene = collaborativeRuntime && sceneId === 'fishing';
+  // Keep saved scene IDs compatible while every scene uses the new GAME//OS art.
+  const rooftopScene = collaborativeRuntime && sceneId === 'fishing';
   const sceneImage = !collaborativeRuntime
     ? soloScenePack.sceneImage
-    : bakedRuntimeScene ? fishingScene : collaborationScene;
+    : rooftopScene ? CYBER_SCENES.fishing : GU_SCENE_IMAGES.collaboration;
   const orderedCrew = useMemo(() => [
     ...crew.filter((member) => member.active),
     ...crew.filter((member) => !member.active),
@@ -97,13 +95,13 @@ export function ProductionDiorama({
   const activeActor = actorSnapshots[activeMember.role] ?? initialCrewActor(activeMember);
   const visibleEgg = activeActor.easterEgg;
   const statusLabel = status === 'running'
-    ? 'NOOBI WORKING'
+    ? 'GAME//OS WORKING'
     : status === 'completed'
       ? 'READY TO PLAY'
       : status === 'waiting'
         ? 'WAITING FOR YOU'
         : status === 'draft'
-          ? 'TAKING A BREAK'
+          ? 'DRAFT READY'
           : status === 'stopped'
             ? 'PAUSED'
             : 'NEEDS A HAND';
@@ -112,7 +110,7 @@ export function ProductionDiorama({
     <section
       className={`production-diorama status-${status}`}
       data-stage={scene.stage}
-      data-noobi-pack={packId}
+      data-gu-pack={packId}
       data-stage-mode={stageMode}
       data-runtime-scene={collaborativeRuntime ? sceneId : soloSceneId}
       data-station={activeMember.station}
@@ -125,8 +123,8 @@ export function ProductionDiorama({
       data-active-crew-role={activeMember.role}
       data-crew-size={crew.length}
       data-crew-packs={runtimeConfiguredCrew?.map((member) => `${member.role}:${member.packId}`).join(',') ?? packId}
-      data-scene-mode={bakedRuntimeScene ? 'fishing' : collaborativeRuntime ? 'collaboration' : 'solo'}
-      aria-label={collaborativeRuntime ? 'Noobi 多人像素制作场景' : 'Noobi 单人像素制作场景'}
+      data-scene-mode={rooftopScene ? 'fishing' : collaborativeRuntime ? 'collaboration' : 'solo'}
+      aria-label={collaborativeRuntime ? '赛博朋克像素协作制作台' : '赛博朋克像素制作台'}
     >
       <div className="workshop-map" aria-hidden="true">
         <img src={sceneImage} alt="" draggable={false} />
@@ -141,23 +139,7 @@ export function ProductionDiorama({
         <p>{activeMember.roleLabel} · {activeMember.stationLabel} · {scene.detail}</p>
       </div>
 
-      {!bakedRuntimeScene ? WORKSHOP_DEPTH_OBJECTS.map((depthObject) => (
-        <img
-          key={depthObject.id}
-          className="workshop-occluder"
-          src={sceneImage}
-          alt=""
-          draggable={false}
-          aria-hidden="true"
-          data-depth-object={depthObject.id}
-          style={{
-            clipPath: depthObject.clipPath,
-            zIndex: productionDepthZ(depthObject.depthY),
-          }}
-        />
-      )) : null}
-
-      {!bakedRuntimeScene ? orderedCrew.map((member) => {
+      {orderedCrew.map((member) => {
         const configuredMember = runtimeConfiguredCrew?.find((item) => item.role === member.role);
         const memberPackId = configuredMember?.packId ?? packId;
         return (
@@ -167,14 +149,14 @@ export function ProductionDiorama({
             packId={memberPackId}
             status={status}
             manifest={configuredMember
-              ? noobiProductionPack(configuredMember.packId).spriteManifest
+              ? guProductionPack(configuredMember.packId).spriteManifest
               : activeSpriteManifest}
             documentVisible={documentVisible}
             reducedMotion={reducedMotion}
             onActorChange={handleActorChange}
           />
         );
-      }) : null}
+      })}
 
       <div className="diorama-action" aria-hidden="true">
         <span className={`diorama-action-led ${activeActor.phase === 'walking' ? 'is-moving' : ''}`} />
@@ -192,9 +174,9 @@ export function ProductionDiorama({
 
 interface ProductionCrewActorProps {
   member: ProductionCrewMember;
-  packId: NoobiPackId;
+  packId: GuPackId;
   status: ProjectStatus;
-  manifest: NoobiSpriteManifest;
+  manifest: GuSpriteManifest;
   documentVisible: boolean;
   reducedMotion: boolean;
   onActorChange: (role: ProductionCrewRole, actor: ProductionAssistantMotionState) => void;
@@ -283,13 +265,13 @@ function ProductionCrewActor({
   const renderedPose = visibleEgg?.id === 'debug-dance'
     ? 'celebrate'
     : actor.action.pose;
-  const shadowProfile = noobiGroundShadowProfile(renderedPose, actor.phase);
+  const shadowProfile = guGroundShadowProfile(renderedPose, actor.phase);
 
   return (
     <div
       className={`production-assistant production-crew-member phase-${actor.phase}${member.active ? ' is-primary' : ' is-support'}${visibleEgg ? ` egg-${visibleEgg.id}` : ''}`}
       data-crew-role={member.role}
-      data-noobi-member-pack={packId}
+      data-gu-member-pack={packId}
       data-crew-active={member.active ? 'true' : 'false'}
       data-crew-station={member.station}
       data-action={actor.action.id}
@@ -306,11 +288,11 @@ function ProductionCrewActor({
     >
       <span
         className="production-assistant-shadow"
-        data-noobi-ground-shadow={member.active ? 'main' : member.role}
+        data-gu-ground-shadow={member.active ? 'main' : member.role}
         data-shadow-profile={shadowProfile}
       />
       <div className="production-assistant-bob">
-        <NoobiAnimatedSprite
+        <GuAnimatedSprite
           pose={renderedPose}
           manifest={manifest}
           playbackKey={`${member.role}:${actor.action.id}:${visibleEgg?.id ?? 'none'}`}
@@ -320,14 +302,14 @@ function ProductionCrewActor({
       </div>
       <span className="production-crew-role-pin">{member.badgeLabel}</span>
       {visibleEgg?.id === 'golden-acorn' ? <span className="assistant-golden-acorn" /> : null}
-      {visibleEgg?.id === 'mini-noobi' ? (
-        <span className="assistant-mini-noobi">
+      {visibleEgg?.id === 'mini-gu' ? (
+        <span className="assistant-mini-gu">
           <span
-            className="assistant-mini-noobi-shadow"
-            data-noobi-ground-shadow="mini"
+            className="assistant-mini-gu-shadow"
+            data-gu-ground-shadow="mini"
             data-shadow-profile="mini"
           />
-          <NoobiAnimatedSprite
+          <GuAnimatedSprite
             pose="celebrate"
             manifest={manifest}
             playbackKey={`${member.role}:${visibleEgg.id}`}
@@ -345,7 +327,7 @@ function ProductionCrewActor({
 export function configuredProductionCrewMembers(
   stage: PipelineStage,
   status: ProjectStatus,
-  configuredCrew: readonly NoobiCrewMember[] | undefined,
+  configuredCrew: readonly GuCrewMember[] | undefined,
   legacyCrewSize: ProductionCrewSize = 4,
 ): readonly ProductionCrewMember[] {
   if (!configuredCrew?.length) return productionCrewMembers(stage, status, legacyCrewSize);
@@ -361,16 +343,16 @@ export function configuredProductionCrewMembers(
     : member);
 }
 
-export type NoobiGroundShadowProfile = 'standing' | 'walking' | 'sleeping';
+export type GuGroundShadowProfile = 'standing' | 'walking' | 'sleeping';
 
 /**
  * Keeps the contact shadow tied to locomotion instead of individual sprite crops.
  * This is exported so renderer smoke tests can verify every pose has a stable profile.
  */
-export function noobiGroundShadowProfile(
+export function guGroundShadowProfile(
   pose: ProductionAssistantMotionState['action']['pose'],
   phase: ProductionAssistantMotionState['phase'],
-): NoobiGroundShadowProfile {
+): GuGroundShadowProfile {
   if (pose === 'sleep') return 'sleeping';
   if (pose === 'walk' || phase === 'walking') return 'walking';
   return 'standing';

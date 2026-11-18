@@ -28,8 +28,8 @@ import type {
   FileNode,
   FileReadResult,
   GameEngine,
-  NoobiCrewMember,
-  NoobiPackId,
+  GuCrewMember,
+  GuPackId,
   PipelineStage,
   ProjectIcon,
   ProjectRecord,
@@ -38,22 +38,23 @@ import type {
 } from '../shared/contracts.js';
 import {
   DEFAULT_GAME_ENGINE,
-  DEFAULT_NOOBI_CREW,
-  DEFAULT_NOOBI_PACK_ID,
-  DEFAULT_NOOBI_SCENE_ID,
-  DEFAULT_NOOBI_SOLO_SCENE_ID,
-  DEFAULT_NOOBI_STAGE_MODE,
+  DEFAULT_GU_CREW,
+  DEFAULT_GU_PACK_ID,
+  DEFAULT_GU_SCENE_ID,
+  DEFAULT_GU_SOLO_SCENE_ID,
+  DEFAULT_GU_STAGE_MODE,
   DEFAULT_TARGET_FRAME_RATE,
-  NOOBI_CREW_MAX_SIZE,
-  NOOBI_CREW_MIN_SIZE,
-  NOOBI_PACK_IDS,
+  GU_CREW_MAX_SIZE,
+  GU_CREW_MIN_SIZE,
+  GU_PACK_IDS,
   isGameEngine,
-  isNoobiCrewRole,
-  isNoobiPackId,
-  isNoobiSceneId,
-  isNoobiStageMode,
+  isGuCrewRole,
+  isGuPackId,
+  isGuSceneId,
+  isGuStageMode,
   isTargetFrameRate,
 } from '../shared/contracts.js';
+import { importLegacyProjectMetadata } from './legacyProjectMetadata.js';
 import { createWorkspaceTemplate } from './workspaceTemplate.js';
 
 const STORE_VERSION = 1;
@@ -159,7 +160,9 @@ export class ProjectStore {
   async get(projectId: string): Promise<ProjectRecord> {
     await this.init();
     await this.#mutationTail;
-    return structuredClone(this.#findProject(projectId));
+    const project = this.#findProject(projectId);
+    await importLegacyProjectMetadata(project.root, project.id);
+    return structuredClone(project);
   }
 
   async getProject(projectId: string): Promise<ProjectRecord> {
@@ -189,8 +192,8 @@ export class ProjectStore {
         stage: 'brief',
         engine: normalized.engine,
         targetFrameRate: DEFAULT_TARGET_FRAME_RATE,
-        noobiPackOverrideId: null,
-        noobiCrewOverride: null,
+        guPackOverrideId: null,
+        guCrewOverride: null,
         model: normalized.model,
         threadId: null,
         toolsetVersion: 0,
@@ -252,7 +255,7 @@ export class ProjectStore {
           maxRetries: 3,
           retryDelay: 100,
         }).catch((error) => {
-          if (process.env.NOOBI_DEBUG === '1') {
+          if (process.env.GU_DEBUG === '1') {
             process.stderr.write(
               `[project-store] staged workspace cleanup failed for ${id}: ${asError(error).message}\n`,
             );
@@ -274,7 +277,7 @@ export class ProjectStore {
       if (index < 0) throw new Error(`Unknown project: ${id}`);
       const root = await resolveExistingProjectDirectory(projectDirectory, id);
       const duplicate = state.projects.find((project) => project.id !== id && project.root === root);
-      if (duplicate) throw new Error('这个文件夹已经绑定到另一个 NooBi 游戏。');
+      if (duplicate) throw new Error('这个文件夹已经绑定到另一个 GU 游戏。');
       const next: ProjectRecord = {
         ...state.projects[index]!,
         root,
@@ -546,7 +549,8 @@ async function stageVerifiedWorkspaceForDeletion(project: ProjectRecord): Promis
     throw new Error('Project workspace path does not match its canonical directory');
   }
 
-  const metadataPath = join(lexicalRoot, '.noobi', 'project.json');
+  await importLegacyProjectMetadata(lexicalRoot, project.id);
+  const metadataPath = join(lexicalRoot, '.gu', 'project.json');
   const handle = await open(metadataPath, READ_ONLY_NOFOLLOW);
   try {
     const info = await handle.stat();
@@ -566,7 +570,7 @@ async function stageVerifiedWorkspaceForDeletion(project: ProjectRecord): Promis
 
   const stagedRoot = join(
     dirname(lexicalRoot),
-    `.${basename(lexicalRoot)}.noobi-delete-${randomUUID()}`,
+    `.${basename(lexicalRoot)}.gu-delete-${randomUUID()}`,
   );
   await rename(lexicalRoot, stagedRoot);
   return stagedRoot;
@@ -626,8 +630,8 @@ function applyProjectPatch(current: ProjectRecord, patch: ProjectPatch): Project
     'status',
     'stage',
     'targetFrameRate',
-    'noobiPackOverrideId',
-    'noobiCrewOverride',
+    'guPackOverrideId',
+    'guCrewOverride',
     'model',
     'threadId',
     'toolsetVersion',
@@ -659,18 +663,18 @@ function applyProjectPatch(current: ProjectRecord, patch: ProjectPatch): Project
     }
     next.targetFrameRate = patch.targetFrameRate;
   }
-  if (patch.noobiPackOverrideId !== undefined) {
-    if (patch.noobiPackOverrideId !== null && !isNoobiPackId(patch.noobiPackOverrideId)) {
+  if (patch.guPackOverrideId !== undefined) {
+    if (patch.guPackOverrideId !== null && !isGuPackId(patch.guPackOverrideId)) {
       throw new Error(
-        `Project noobiPackOverrideId must be ${NOOBI_PACK_IDS.join(', ')}, or null`,
+        `Project guPackOverrideId must be ${GU_PACK_IDS.join(', ')}, or null`,
       );
     }
-    next.noobiPackOverrideId = patch.noobiPackOverrideId;
+    next.guPackOverrideId = patch.guPackOverrideId;
   }
-  if (patch.noobiCrewOverride !== undefined) {
-    next.noobiCrewOverride = patch.noobiCrewOverride === null
+  if (patch.guCrewOverride !== undefined) {
+    next.guCrewOverride = patch.guCrewOverride === null
       ? null
-      : validatedNoobiCrew(patch.noobiCrewOverride, 'Project noobiCrewOverride');
+      : validatedGuCrew(patch.guCrewOverride, 'Project guCrewOverride');
   }
   for (const field of ['model', 'threadId', 'activeTurnId', 'lastError'] as const) {
     if (patch[field] !== undefined) {
@@ -706,7 +710,17 @@ function parsePersistedStore(source: string): {
   if (!isRecord(parsed) || parsed.version !== STORE_VERSION || !Array.isArray(parsed.projects)) {
     throw new Error(`Unsupported or invalid project store schema (expected version ${STORE_VERSION})`);
   }
-  const projects = parsed.projects.map(validateProjectRecord);
+  const projects = parsed.projects.map((value) => validateProjectRecord(isRecord(value) ? {
+    ...value,
+    guPackOverrideId: Object.hasOwn(value, 'guPackOverrideId') ? value.guPackOverrideId : value.noobiPackOverrideId,
+    guCrewOverride: Object.hasOwn(value, 'guCrewOverride') ? value.guCrewOverride : value.noobiCrewOverride,
+  } : value));
+  const settings = isRecord(parsed.settings) ? { ...parsed.settings } : parsed.settings;
+  if (isRecord(settings)) {
+    for (const field of ['StageMode', 'SoloSceneId', 'SceneId', 'PackId', 'Crew']) {
+      if (!Object.hasOwn(settings, 'defaultGu' + field)) settings['defaultGu' + field] = settings['defaultNoobi' + field];
+    }
+  }
   const ids = new Set<string>();
   for (const project of projects) {
     if (ids.has(project.id)) throw new Error(`Project store contains duplicate id: ${project.id}`);
@@ -716,7 +730,7 @@ function parsePersistedStore(source: string): {
     store: {
       version: STORE_VERSION,
       projects,
-      settings: validateSettings(parsed.settings),
+      settings: validateSettings(settings),
     },
     needsMigration: parsed.projects.some(
       (project) => isRecord(project)
@@ -724,16 +738,16 @@ function parsePersistedStore(source: string): {
           project.targetFrameRate === undefined
           || project.engine === undefined
           || project.pinned === undefined
-          || project.noobiPackOverrideId === undefined
-          || project.noobiCrewOverride === undefined
+          || project.guPackOverrideId === undefined
+          || project.guCrewOverride === undefined
           || project.icon === undefined
         ),
     ) || !isRecord(parsed.settings)
-      || parsed.settings.defaultNoobiStageMode === undefined
-      || parsed.settings.defaultNoobiSoloSceneId === undefined
-      || parsed.settings.defaultNoobiSceneId === undefined
-      || parsed.settings.defaultNoobiPackId === undefined
-      || parsed.settings.defaultNoobiCrew === undefined,
+      || parsed.settings.defaultGuStageMode === undefined
+      || parsed.settings.defaultGuSoloSceneId === undefined
+      || parsed.settings.defaultGuSceneId === undefined
+      || parsed.settings.defaultGuPackId === undefined
+      || parsed.settings.defaultGuCrew === undefined,
   };
 }
 
@@ -770,12 +784,12 @@ function validateProjectRecord(value: unknown): ProjectRecord {
     targetFrameRate: value.targetFrameRate === undefined
       ? DEFAULT_TARGET_FRAME_RATE
       : validatedTargetFrameRate(value.targetFrameRate, id),
-    noobiPackOverrideId: value.noobiPackOverrideId === undefined
+    guPackOverrideId: value.guPackOverrideId === undefined
       ? null
-      : validatedNoobiPackOverrideId(value.noobiPackOverrideId, id),
-    noobiCrewOverride: value.noobiCrewOverride === undefined
+      : validatedGuPackOverrideId(value.guPackOverrideId, id),
+    guCrewOverride: value.guCrewOverride === undefined
       ? null
-      : validatedNoobiCrewOverride(value.noobiCrewOverride, id),
+      : validatedGuCrewOverride(value.guCrewOverride, id),
     model: nullableString(value.model, `Project ${id} model`),
     threadId: nullableString(value.threadId, `Project ${id} thread id`),
     toolsetVersion: value.toolsetVersion === undefined
@@ -803,7 +817,8 @@ function validatedProjectIcon(value: unknown, projectId: string): ProjectIcon {
   } catch {
     throw new Error(`Project ${projectId} has an invalid icon path`);
   }
-  if (path !== '.noobi/icon.png') {
+  if (path === '.noobi/icon.png') path = '.gu/icon.png';
+  if (path !== '.gu/icon.png') {
     throw new Error(`Project ${projectId} has an unexpected icon path`);
   }
   if (value.source !== 'procedural' && value.source !== 'ai') {
@@ -827,33 +842,33 @@ function validatedGameEngine(value: unknown, projectId: string): GameEngine {
   return value;
 }
 
-function validatedNoobiPackOverrideId(value: unknown, projectId: string): NoobiPackId | null {
-  if (value !== null && !isNoobiPackId(value)) {
-    throw new Error(`Project ${projectId} has an invalid Noobi pack override`);
+function validatedGuPackOverrideId(value: unknown, projectId: string): GuPackId | null {
+  if (value !== null && !isGuPackId(value)) {
+    throw new Error(`Project ${projectId} has an invalid GU pack override`);
   }
   return value;
 }
 
-function validatedNoobiCrewOverride(value: unknown, projectId: string): NoobiCrewMember[] | null {
-  return value === null ? null : validatedNoobiCrew(value, `Project ${projectId} Noobi crew override`);
+function validatedGuCrewOverride(value: unknown, projectId: string): GuCrewMember[] | null {
+  return value === null ? null : validatedGuCrew(value, `Project ${projectId} GU crew override`);
 }
 
-function validatedNoobiCrew(value: unknown, field: string): NoobiCrewMember[] {
+function validatedGuCrew(value: unknown, field: string): GuCrewMember[] {
   if (!Array.isArray(value)) throw new Error(`${field} must be an array`);
-  if (value.length < NOOBI_CREW_MIN_SIZE || value.length > NOOBI_CREW_MAX_SIZE) {
+  if (value.length < GU_CREW_MIN_SIZE || value.length > GU_CREW_MAX_SIZE) {
     throw new Error(`${field} must contain 2 to 4 members`);
   }
-  const packIds = new Set<NoobiPackId>();
-  const roles = new Set<NoobiCrewMember['role']>();
+  const packIds = new Set<GuPackId>();
+  const roles = new Set<GuCrewMember['role']>();
   return value.map((candidate, index) => {
     if (!isRecord(candidate)) throw new Error(`${field} member ${index + 1} is invalid`);
     if (Object.keys(candidate).some((key) => key !== 'packId' && key !== 'role')) {
       throw new Error(`${field} members may only contain packId and role`);
     }
-    if (!isNoobiPackId(candidate.packId)) {
+    if (!isGuPackId(candidate.packId)) {
       throw new Error(`${field} member ${index + 1} has an invalid packId`);
     }
-    if (!isNoobiCrewRole(candidate.role)) {
+    if (!isGuCrewRole(candidate.role)) {
       throw new Error(`${field} member ${index + 1} has an invalid role`);
     }
     if (packIds.has(candidate.packId)) throw new Error(`${field} contains a duplicate packId`);
@@ -880,41 +895,41 @@ function validateSettings(value: unknown): AppSettings {
     throw new Error('Default model setting must be a non-empty string or null');
   }
   if (!isNonEmptyString(value.defaultEffort)) throw new Error('Default effort setting is invalid');
-  const defaultNoobiStageMode = value.defaultNoobiStageMode === undefined
-    ? DEFAULT_NOOBI_STAGE_MODE
-    : value.defaultNoobiStageMode;
-  if (!isNoobiStageMode(defaultNoobiStageMode)) {
-    throw new Error('Default Noobi stage mode setting is invalid');
+  const defaultGuStageMode = value.defaultGuStageMode === undefined
+    ? DEFAULT_GU_STAGE_MODE
+    : value.defaultGuStageMode;
+  if (!isGuStageMode(defaultGuStageMode)) {
+    throw new Error('Default GU stage mode setting is invalid');
   }
-  const defaultNoobiSoloSceneId = value.defaultNoobiSoloSceneId === undefined
-    ? DEFAULT_NOOBI_SOLO_SCENE_ID
-    : value.defaultNoobiSoloSceneId;
-  if (!isNoobiPackId(defaultNoobiSoloSceneId)) {
-    throw new Error('Default Noobi solo scene setting is invalid');
+  const defaultGuSoloSceneId = value.defaultGuSoloSceneId === undefined
+    ? DEFAULT_GU_SOLO_SCENE_ID
+    : value.defaultGuSoloSceneId;
+  if (!isGuPackId(defaultGuSoloSceneId)) {
+    throw new Error('Default GU solo scene setting is invalid');
   }
-  const defaultNoobiSceneId = value.defaultNoobiSceneId === undefined
-    ? DEFAULT_NOOBI_SCENE_ID
-    : value.defaultNoobiSceneId;
-  if (!isNoobiSceneId(defaultNoobiSceneId)) {
-    throw new Error('Default Noobi scene setting is invalid');
+  const defaultGuSceneId = value.defaultGuSceneId === undefined
+    ? DEFAULT_GU_SCENE_ID
+    : value.defaultGuSceneId;
+  if (!isGuSceneId(defaultGuSceneId)) {
+    throw new Error('Default GU scene setting is invalid');
   }
-  const defaultNoobiPackId = value.defaultNoobiPackId === undefined
-    ? DEFAULT_NOOBI_PACK_ID
-    : value.defaultNoobiPackId;
-  if (!isNoobiPackId(defaultNoobiPackId)) throw new Error('Default Noobi pack setting is invalid');
-  const defaultNoobiCrew = value.defaultNoobiCrew === undefined
-    ? DEFAULT_NOOBI_CREW
-    : value.defaultNoobiCrew;
+  const defaultGuPackId = value.defaultGuPackId === undefined
+    ? DEFAULT_GU_PACK_ID
+    : value.defaultGuPackId;
+  if (!isGuPackId(defaultGuPackId)) throw new Error('Default GU pack setting is invalid');
+  const defaultGuCrew = value.defaultGuCrew === undefined
+    ? DEFAULT_GU_CREW
+    : value.defaultGuCrew;
   if (value.theme !== 'dark' && value.theme !== 'light') throw new Error('Theme setting is invalid');
   return {
     defaultWorkspace: resolve(value.defaultWorkspace),
     defaultModel: value.defaultModel === null ? null : value.defaultModel.trim(),
     defaultEffort: value.defaultEffort.trim(),
-    defaultNoobiStageMode,
-    defaultNoobiSoloSceneId,
-    defaultNoobiSceneId,
-    defaultNoobiPackId,
-    defaultNoobiCrew: validatedNoobiCrew(defaultNoobiCrew, 'Default Noobi crew setting'),
+    defaultGuStageMode,
+    defaultGuSoloSceneId,
+    defaultGuSceneId,
+    defaultGuPackId,
+    defaultGuCrew: validatedGuCrew(defaultGuCrew, 'Default GU crew setting'),
     theme: value.theme,
   };
 }
@@ -924,11 +939,11 @@ function defaultSettings(defaultWorkspace: string): AppSettings {
     defaultWorkspace,
     defaultModel: null,
     defaultEffort: 'medium',
-    defaultNoobiStageMode: DEFAULT_NOOBI_STAGE_MODE,
-    defaultNoobiSoloSceneId: DEFAULT_NOOBI_SOLO_SCENE_ID,
-    defaultNoobiSceneId: DEFAULT_NOOBI_SCENE_ID,
-    defaultNoobiPackId: DEFAULT_NOOBI_PACK_ID,
-    defaultNoobiCrew: DEFAULT_NOOBI_CREW.map((member) => ({ ...member })),
+    defaultGuStageMode: DEFAULT_GU_STAGE_MODE,
+    defaultGuSoloSceneId: DEFAULT_GU_SOLO_SCENE_ID,
+    defaultGuSceneId: DEFAULT_GU_SCENE_ID,
+    defaultGuPackId: DEFAULT_GU_PACK_ID,
+    defaultGuCrew: DEFAULT_GU_CREW.map((member) => ({ ...member })),
     theme: 'light',
   };
 }
@@ -965,24 +980,25 @@ export async function resolveExistingProjectDirectory(
   projectId: string,
 ): Promise<string> {
   const canonical = await canonicalDirectory(directory);
-  const metadataPath = join(canonical, '.noobi', 'project.json');
+  await importLegacyProjectMetadata(canonical, projectId);
+  const metadataPath = join(canonical, '.gu', 'project.json');
   let metadataInfo;
   try {
     metadataInfo = await lstat(metadataPath);
   } catch (error) {
     if (isNodeError(error, 'ENOENT')) {
-      throw new Error('所选文件夹不是 NooBi 游戏文件夹：缺少 .noobi/project.json。');
+      throw new Error('所选文件夹不是 GU 游戏文件夹：缺少 .gu/project.json。');
     }
     throw error;
   }
   if (metadataInfo.isSymbolicLink() || !metadataInfo.isFile() || metadataInfo.size > MAX_FILE_BYTES) {
-    throw new Error('所选文件夹的 NooBi 项目标记无效。');
+    throw new Error('所选文件夹的 GU 项目标记无效。');
   }
   let metadata: unknown;
   try {
     metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
   } catch {
-    throw new Error('所选文件夹的 NooBi 项目标记无法读取。');
+    throw new Error('所选文件夹的 GU 项目标记无法读取。');
   }
   if (!metadata || typeof metadata !== 'object' || (metadata as { id?: unknown }).id !== validatedId(projectId)) {
     throw new Error('所选文件夹不属于当前游戏，请选择改名前的同一个游戏文件夹。');
@@ -1021,9 +1037,9 @@ function workspaceSlug(name: string): string {
     .replace(/^-+|-+$/gu, '')
     .slice(0, 60)
     .replace(/[. ]+$/gu, '');
-  const candidate = normalized || `noobi-game-${randomUUID().slice(0, 8)}`;
+  const candidate = normalized || `gu-game-${randomUUID().slice(0, 8)}`;
   return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(candidate)
-    ? `noobi-${candidate}`
+    ? `gu-${candidate}`
     : candidate;
 }
 
